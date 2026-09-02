@@ -26,7 +26,7 @@
           overlays = [ rust-overlay.overlays.default ];
         };
 
-        rustToolchain = pkgs.rust-bin.stable."1.93.0".default.override {
+        rustToolchain = pkgs.rust-bin.stable."1.98.0".default.override {
           extensions = [
             "rust-src"
             "llvm-tools"
