@@ -8,7 +8,7 @@ library LibHybridCompression {
         returns (uint256 alpha, uint256 gamma)
     {
         require(beta < field);
-        alpha = uint256(keccak256(abi.encodePacked(stmt))) % field;
+        alpha = hash(stmt, field);
         uint256 sigma = addmod(alpha, beta, field);
         gamma = uhf(sigma, stmt, field);
     }
@@ -19,5 +19,9 @@ library LibHybridCompression {
             acc = mulmod(acc, sigma, field);
             acc = addmod(acc, x[i - 1], field);
         }
+    }
+
+    function hash(uint256[] memory x, uint256 field) internal pure returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(x))) % field;
     }
 }
