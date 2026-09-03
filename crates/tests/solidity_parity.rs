@@ -5,7 +5,7 @@ use alloy::{
 use ark_crypto_primitives::crh::CRHScheme;
 use ark_ed_on_bn254::Fr;
 use ark_ff::{BigInteger, PrimeField, UniformRand};
-use ark_hybrid_compression::{hybrid_compression::hybrid_compression, keccak::KeccakCRH, uhf::uhf};
+use ark_hybrid_compression::{KeccakCRH, hybrid_compression};
 
 sol!(
     #[sol(rpc)]
@@ -47,16 +47,6 @@ async fn native_matches_solidity() {
         let native_hash = KeccakCRH::<Fr>::evaluate(&(), &stmt[..]).unwrap();
         let sol_hash = contract.hash(stmt_sol.clone(), field).call().await.unwrap();
         assert_eq!(fr_to_u256(native_hash), sol_hash);
-
-        // uhf()
-        let sigma = Fr::rand(&mut rng);
-        let native_uhf = uhf(sigma, &stmt);
-        let sol_uhf = contract
-            .uhf(fr_to_u256(sigma), stmt_sol.clone(), field)
-            .call()
-            .await
-            .unwrap();
-        assert_eq!(fr_to_u256(native_uhf), sol_uhf);
 
         // hybridCompression()
         let alpha = Fr::rand(&mut rng);

@@ -9,7 +9,7 @@ pub mod constraints;
 ///
 /// See [`constraints::uhf_gadget`] for the in-circuit gadget.
 ///
-/// https://eprint.iacr.org/2025/1500.pdf
+/// <https://eprint.iacr.org/2025/1500.pdf>
 pub fn uhf<F: PrimeField>(sigma: F, x: &[F]) -> F {
     let mut acc = F::zero();
     for xi in x.iter().rev() {

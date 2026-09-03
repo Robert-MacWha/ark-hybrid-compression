@@ -1,7 +1,14 @@
 [package]
 name = "ark-hybrid-compression"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
+description = "Arkworks Hybrid Compression"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Robert-MacWha/ark-hybrid-profiler"
+keywords = ["ark", "circuit", "snark"]
+categories = ["cryptography"]
+exclude = ["*/testdata/**/*", ".gitignore"]
 
 [features]
 default = ["alloy"]
@@ -23,9 +30,4 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 [[test]]
 name = "solidity_parity"
 path = "tests/solidity_parity.rs"
-required-features = ["alloy"]
-
-[[test]]
-name = "circuit_integration"
-path = "tests/circuit_integration.rs"
 required-features = ["alloy"]

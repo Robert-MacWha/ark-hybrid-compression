@@ -6,7 +6,7 @@ use crate::uhf::uhf;
 pub mod constraints;
 
 /// Computes the values used by the circuit-side of hybrid compression
-/// (Construction 2).
+/// (Construction 2). Returns the pair `(beta, gamma)`.
 ///
 /// `alpha` is the counterpart hash computed *outside* the circuit (e.g. by
 /// [`crate::keccak::KeccakCRH`] / `LibHybridCompression.hash` in Solidity)
@@ -15,7 +15,7 @@ pub mod constraints;
 ///
 /// See [`constraints::hybrid_compression`] for the in-circuit gadget.
 ///
-/// https://eprint.iacr.org/2025/1500.pdf
+/// <https://eprint.iacr.org/2025/1500.pdf>
 pub fn hybrid_compression<CRH, F>(
     params: &CRH::Parameters,
     alpha: CRH::Output,

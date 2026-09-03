@@ -8,7 +8,7 @@ use ark_crypto_primitives::sponge::poseidon::PoseidonConfig;
 use ark_ed_on_bn254::Fr;
 use ark_ff::{BigInteger, PrimeField, UniformRand};
 
-mod example;
+mod common;
 
 sol!(
     #[sol(rpc)]
@@ -28,8 +28,8 @@ fn fr_to_u256(f: Fr) -> U256 {
     U256::from_be_bytes(buf)
 }
 
-#[tokio::test]
-async fn example_circuit_integration() {
+#[tokio::main]
+async fn main() {
     let anvil = Anvil::new().try_spawn().unwrap();
     let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
     let provider = ProviderBuilder::new()
@@ -65,7 +65,7 @@ async fn example_circuit_integration() {
 
     let stmt: [Fr; 4] = from_fn(|_| Fr::rand(&mut rng));
     let stmt_sol: Vec<U256> = stmt.iter().map(|f| fr_to_u256(*f)).collect();
-    let circuit = example::circuit::ExampleCircuit::new(&stmt, poseidon_params.clone());
+    let circuit = common::circuit::ExampleCircuit::new(&stmt, poseidon_params.clone());
     let (alpha, beta, gamma) = circuit.prove();
 
     // Simulates what a real verifying key would enforce: only the exact

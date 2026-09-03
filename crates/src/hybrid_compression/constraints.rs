@@ -5,10 +5,11 @@ use ark_relations::gr1cs::SynthesisError;
 
 use crate::uhf::constraints::uhf_gadget;
 
-/// In-circuit gadget for hybrid compression (Construction 2).
+/// In-circuit gadget for hybrid compression (Construction 2). Returns the pair
+/// `(beta, gamma)`.
 ///
 /// # Security:
-/// `alpha` and `beta` must be allocated as public inputs. `stmt` may be
+/// `alpha`, `beta`, and `gamma` must be allocated as public inputs. `stmt` may be
 /// allocated as a private witness.
 ///
 /// `alpha` is the counterpart hash computed *outside* the circuit. `beta` is
@@ -17,7 +18,7 @@ use crate::uhf::constraints::uhf_gadget;
 /// values are equal, both parties can be assured that they are operating on
 /// the same `stmt`.
 ///
-/// See `examples/circuit.rs` for a full worked example of the required wiring.
+/// See [`crate::hybrid_compression`] for more information.
 pub fn hybrid_compression<H, F, CRH>(
     params: &CRH::ParametersVar,
     alpha: CRH::OutputVar,

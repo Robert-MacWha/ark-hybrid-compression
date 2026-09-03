@@ -971,7 +971,7 @@ dependencies = [
 
 [[package]]
 name = "ark-hybrid-compression"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "alloy",
  "alloy-primitives",
