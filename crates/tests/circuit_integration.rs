@@ -1,15 +1,3 @@
-//! End-to-end integration test: builds the example circuit from
-//! `examples/circuit.rs`, then submits its public inputs to a deployed
-//! `HybridCompressionExample` contract backed by a mock argument-system
-//! verifier (see `contracts/test/mocks/MockArgVer.sol` for why the SNARK
-//! verifier itself is mocked out here).
-//!
-//! This exercises the full Construction 2 flow: circuit produces
-//! `(alpha, beta, gamma)` as public inputs -> off-chain "prover" submits
-//! `(stmt, beta, proof)` to the contract -> contract recomputes
-//! `alpha`/`gamma` on-chain from its own copy of `stmt` and checks the
-//! proof against them.
-
 use std::array::from_fn;
 
 use alloy::{
