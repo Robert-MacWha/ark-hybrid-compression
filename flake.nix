@@ -1,6 +1,6 @@
 {
   description = "A basic flake with a shell";
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
   inputs.systems.url = "github:nix-systems/default";
   inputs.flake-utils = {
     url = "github:numtide/flake-utils";
@@ -33,10 +33,13 @@
             "rust-analyzer"
           ];
         };
+
+        rustfmtNightly = pkgs.rust-bin.nightly.latest.rustfmt;
       in
       {
         devShells.default = pkgs.mkShell {
           packages = [
+            rustfmtNightly
             rustToolchain
             pkgs.bacon
             pkgs.foundry

@@ -5,7 +5,15 @@ use crate::uhf::uhf;
 
 pub mod constraints;
 
-/// Computes the circuit-side half of hybrid compression.
+/// Computes the values used by the circuit-side of hybrid compression
+/// (Construction 2).
+///
+/// `alpha` is the counterpart hash computed *outside* the circuit (e.g. by
+/// [`crate::keccak::KeccakCRH`] / `LibHybridCompression.hash` in Solidity)
+/// over the same `stmt`. `CRH` computes `beta`, the circuit-friendly hash
+/// (e.g. Poseidon) over `stmt`.
+///
+/// See [`constraints::hybrid_compression`] for the in-circuit gadget.
 ///
 /// https://eprint.iacr.org/2025/1500.pdf
 pub fn hybrid_compression<CRH, F>(
@@ -82,5 +90,6 @@ mod test {
 
         assert_eq!(beta, beta_var.value().unwrap());
         assert_eq!(gamma, gamma_var.value().unwrap());
+        assert!(cs.is_satisfied().unwrap());
     }
 }

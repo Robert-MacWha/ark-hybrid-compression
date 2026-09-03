@@ -24,3 +24,8 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 name = "solidity_parity"
 path = "tests/solidity_parity.rs"
 required-features = ["alloy"]
+
+[[test]]
+name = "circuit_integration"
+path = "tests/circuit_integration.rs"
+required-features = ["alloy"]
