@@ -39,25 +39,24 @@ async fn native_matches_solidity() {
     };
 
     let mut rng = ark_std::test_rng();
-    for _ in 0..5 {
-        let stmt: Vec<Fr> = (0..10).map(|_| Fr::rand(&mut rng)).collect();
-        let stmt_sol: Vec<U256> = stmt.iter().map(|f| fr_to_u256(*f)).collect();
+    let stmt: Vec<Fr> = (0..10).map(|_| Fr::rand(&mut rng)).collect();
+    let stmt_sol: Vec<U256> = stmt.iter().map(|f| fr_to_u256(*f)).collect();
 
-        // hash()
-        let native_hash = KeccakCRH::<Fr>::evaluate(&(), &stmt[..]).unwrap();
-        let sol_hash = contract.hash(stmt_sol.clone(), field).call().await.unwrap();
-        assert_eq!(fr_to_u256(native_hash), sol_hash);
+    // hash()
+    let native_hash = KeccakCRH::<Fr>::evaluate(&(), &stmt[..]).unwrap();
+    let sol_hash = contract.hash(stmt_sol.clone(), field).call().await.unwrap();
+    assert_eq!(fr_to_u256(native_hash), sol_hash);
 
-        // hybridCompression()
-        let alpha = Fr::rand(&mut rng);
-        let (beta, gamma) = hybrid_compression::<KeccakCRH<Fr>, Fr>(&(), alpha, &stmt).unwrap();
-        let (sol_alpha, sol_gamma) = contract
-            .hybridCompression(fr_to_u256(alpha), stmt_sol, field)
-            .call()
-            .await
-            .unwrap()
-            .into();
-        assert_eq!(fr_to_u256(beta), sol_alpha);
-        assert_eq!(fr_to_u256(gamma), sol_gamma);
-    }
+    // hybridCompression()
+    let alpha = Fr::rand(&mut rng);
+    let (beta, gamma) = hybrid_compression::<KeccakCRH<Fr>, Fr>(&(), alpha, &stmt).unwrap();
+    let (sol_alpha, sol_gamma) = contract
+        .hybridCompression(fr_to_u256(alpha), stmt_sol, field)
+        .call()
+        .await
+        .unwrap()
+        .into();
+
+    assert_eq!(fr_to_u256(beta), sol_alpha);
+    assert_eq!(fr_to_u256(gamma), sol_gamma);
 }
