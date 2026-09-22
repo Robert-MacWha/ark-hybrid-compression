@@ -37,13 +37,22 @@
         rustfmtNightly = pkgs.rust-bin.nightly.latest.rustfmt;
       in
       {
-        devShells.default = pkgs.mkShell {
-          packages = [
-            rustfmtNightly
-            rustToolchain
-            pkgs.bacon
-            pkgs.foundry
-          ];
+        devShells = {
+          default = pkgs.mkShell {
+            packages = [
+              rustfmtNightly
+              rustToolchain
+              pkgs.bacon
+              pkgs.foundry
+            ];
+          };
+
+          ci = pkgs.mkShell {
+            packages = [
+              rustToolchain
+              pkgs.foundry
+            ];
+          };
         };
       }
     );

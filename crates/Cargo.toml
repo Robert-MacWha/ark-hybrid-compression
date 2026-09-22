@@ -8,11 +8,12 @@ readme = "README.md"
 repository = "https://github.com/Robert-MacWha/ark-hybrid-profiler"
 keywords = ["ark", "circuit", "snark"]
 categories = ["cryptography"]
-exclude = ["*/testdata/**/*", ".gitignore"]
+exclude = [".gitignore"]
 
 [features]
-default = ["alloy"]
+default = []
 alloy = ["alloy-primitives"]
+test-utils = []
 
 [dependencies]
 alloy-primitives = { version = "1.7.1", default-features = false, optional = true }
@@ -33,3 +34,8 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 name = "solidity_parity"
 path = "tests/solidity_parity.rs"
 required-features = ["alloy"]
+
+[[test]]
+name = "circuit_integration"
+path = "tests/circuit_integration.rs"
+required-features = ["alloy", "test-utils"]

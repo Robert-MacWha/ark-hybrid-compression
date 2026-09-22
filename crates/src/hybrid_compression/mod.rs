@@ -1,3 +1,5 @@
+//! Native hybrid compression implementation.
+
 use ark_crypto_primitives::crh::CRHScheme;
 use ark_ff::PrimeField;
 
@@ -35,36 +37,21 @@ where
 mod test {
     use std::array::from_fn;
 
-    use ark_crypto_primitives::{
-        crh::poseidon::constraints::CRHParametersVar, sponge::poseidon::PoseidonConfig,
-    };
+    use ark_crypto_primitives::crh::poseidon::constraints::CRHParametersVar;
     use ark_ed_on_bn254::Fr;
     use ark_ff::UniformRand;
     use ark_r1cs_std::{GR1CSVar, alloc::AllocVar, fields::fp::FpVar};
     use ark_relations::gr1cs::ConstraintSystem;
 
     use super::*;
+    use crate::test_utils::poseidon_params;
 
     #[test]
     fn test_impls_agree() {
         let mut rng = ark_std::test_rng();
         let cs = ConstraintSystem::<Fr>::new_ref();
 
-        let mut mds = vec![vec![]; 3];
-        for i in 0..3 {
-            for _ in 0..3 {
-                mds[i].push(Fr::rand(&mut rng));
-            }
-        }
-
-        let mut ark = vec![vec![]; 8 + 24];
-        for i in 0..8 + 24 {
-            for _ in 0..3 {
-                ark[i].push(Fr::rand(&mut rng));
-            }
-        }
-
-        let params = PoseidonConfig::<Fr>::new(8, 24, 31, mds, ark, 2, 1);
+        let params = poseidon_params::<Fr>(&mut rng);
         let params_var = CRHParametersVar::new_input(cs.clone(), || Ok(&params)).unwrap();
 
         let alpha = Fr::rand(&mut rng);

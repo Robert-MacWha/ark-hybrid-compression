@@ -4,7 +4,7 @@ use alloy::{
 };
 use ark_crypto_primitives::crh::CRHScheme;
 use ark_ed_on_bn254::Fr;
-use ark_ff::{BigInteger, PrimeField, UniformRand};
+use ark_ff::PrimeField;
 use ark_hybrid_compression::{KeccakCRH, hybrid_compression};
 
 sol!(
@@ -13,17 +13,8 @@ sol!(
     "../contracts/out/LibHybridCompression.t.sol/LibHybridCompressionHarness.json"
 );
 
-/// Encodes a field element as a 32-byte big-endian word, matching how Solidity
-/// represents a `uint256`.
-fn fr_to_u256(f: Fr) -> U256 {
-    let be = f.into_bigint().to_bytes_be();
-    let mut buf = [0u8; 32];
-    buf[32 - be.len()..].copy_from_slice(&be);
-    U256::from_be_bytes(buf)
-}
-
 #[tokio::test]
-async fn native_matches_solidity() {
+async fn native_hash_matches_solidity() {
     let anvil = Anvil::new().try_spawn().unwrap();
     let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
     let provider = ProviderBuilder::new()
@@ -31,32 +22,39 @@ async fn native_matches_solidity() {
         .connect_http(anvil.endpoint_url());
     let contract = LibHybridCompressionHarness::deploy(provider).await.unwrap();
 
-    let field = {
-        let be = Fr::MODULUS.to_bytes_be();
-        let mut buf = [0u8; 32];
-        buf[32 - be.len()..].copy_from_slice(&be);
-        U256::from_be_bytes(buf)
-    };
+    let field: U256 = Fr::MODULUS.into();
+    let stmt: Vec<Fr> = (0..10).map(Fr::from).collect();
+    let sol_stmt: Vec<U256> = stmt.clone().into_iter().map(Fr::into).collect();
 
-    let mut rng = ark_std::test_rng();
-    let stmt: Vec<Fr> = (0..10).map(|_| Fr::rand(&mut rng)).collect();
-    let stmt_sol: Vec<U256> = stmt.iter().map(|f| fr_to_u256(*f)).collect();
-
-    // hash()
     let native_hash = KeccakCRH::<Fr>::evaluate(&(), &stmt[..]).unwrap();
-    let sol_hash = contract.hash(stmt_sol.clone(), field).call().await.unwrap();
-    assert_eq!(fr_to_u256(native_hash), sol_hash);
+    let native_hash: U256 = native_hash.into();
+    let sol_hash = contract.hash(sol_stmt.clone(), field).call().await.unwrap();
+    assert_eq!(native_hash, sol_hash);
+}
 
-    // hybridCompression()
-    let alpha = Fr::rand(&mut rng);
+#[tokio::test]
+async fn native_hybrid_compression_matches_solidity() {
+    let anvil = Anvil::new().try_spawn().unwrap();
+    let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+    let provider = ProviderBuilder::new()
+        .wallet(signer)
+        .connect_http(anvil.endpoint_url());
+    let contract = LibHybridCompressionHarness::deploy(provider).await.unwrap();
+
+    let field: U256 = Fr::MODULUS.into();
+    let stmt: Vec<Fr> = (0..10).map(Fr::from).collect();
+    let sol_stmt: Vec<U256> = stmt.clone().into_iter().map(Fr::into).collect();
+
+    let alpha = Fr::from(42);
     let (beta, gamma) = hybrid_compression::<KeccakCRH<Fr>, Fr>(&(), alpha, &stmt).unwrap();
+    let (beta, gamma): (U256, U256) = (beta.into(), gamma.into());
     let (sol_alpha, sol_gamma) = contract
-        .hybridCompression(fr_to_u256(alpha), stmt_sol, field)
+        .hybridCompression(alpha.into(), sol_stmt, field)
         .call()
         .await
         .unwrap()
         .into();
 
-    assert_eq!(fr_to_u256(beta), sol_alpha);
-    assert_eq!(fr_to_u256(gamma), sol_gamma);
+    assert_eq!(beta, sol_alpha);
+    assert_eq!(gamma, sol_gamma);
 }

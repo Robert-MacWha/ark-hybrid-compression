@@ -1,3 +1,5 @@
+//! In-circuit hybrid compression gadget.
+
 use ark_crypto_primitives::crh::{CRHScheme, constraints::CRHSchemeGadget};
 use ark_ff::PrimeField;
 use ark_r1cs_std::fields::fp::FpVar;
@@ -5,8 +7,9 @@ use ark_relations::gr1cs::SynthesisError;
 
 use crate::uhf::constraints::uhf_gadget;
 
-/// In-circuit gadget for hybrid compression (Construction 2). Returns the pair
-/// `(beta, gamma)`.
+/// In-circuit for hybrid compression gadget (Construction 2).
+///
+/// Returns the pair `(beta, gamma)`.
 ///
 /// # Security:
 /// `alpha`, `beta`, and `gamma` must be allocated as public inputs. `stmt` may be

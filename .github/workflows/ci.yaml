@@ -25,6 +25,12 @@ jobs:
         workspaces: "crates"
 
     - run: nix develop .#ci
+
+    - run: nix develop .#ci --command bash -c "cd contracts && forge install foundry-rs/forge-std@v1.16.2 --no-git --shallow && forge build"
+    - run: nix develop .#ci --command bash -c "cd contracts && forge test"
+
     - run: nix develop .#ci --command bash -c "cd crates && cargo check --all-targets --all-features"
-    - run: nix develop .#ci --command bash -c "cd crates && cargo clippy --all-targets --all-features"
+    - run: nix develop .#ci --command bash -c "cd crates && cargo fmt --all -- --check"
+    - run: nix develop .#ci --command bash -c "cd crates && cargo clippy --all-targets --all-features -- -D warnings"
     - run: nix develop .#ci --command bash -c "cd crates && cargo test --all-targets --all-features"
+    - run: nix develop .#ci --command bash -c "cd crates && cargo test --doc --all-features"
