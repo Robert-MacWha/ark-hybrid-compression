@@ -13,7 +13,7 @@ release: check test
     cd crates && cargo publish --dry-run --allow-dirty
     git cliff --bump -o CHANGELOG.md
     cd crates && cargo set-version $(git cliff --bumped-version | sed 's/^v//')
-    echo "If everything looks good, run 'just publish' to push the release."
+    @echo "If everything looks good for $(git cliff --bumped-version), run 'just publish' to push the release."
 
 publish:
     git add CHANGELOG.md
