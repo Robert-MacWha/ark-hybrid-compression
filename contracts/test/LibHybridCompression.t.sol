@@ -16,6 +16,10 @@ contract LibHybridCompressionHarness {
     function uhf(uint256 sigma, uint256[] calldata x, uint256 field) public pure returns (uint256 acc) {
         return LibHybridCompression.uhf(sigma, x, field);
     }
+
+    function hash(uint256[] calldata x, uint256 field) public pure returns (uint256 acc) {
+        return LibHybridCompression.hash(x, field);
+    }
 }
 
 contract LibHybridCompressionTest is Test {

@@ -26,7 +26,7 @@ library LibHybridCompression {
         }
     }
 
-    function hash(uint256[] memory x, uint256 field) private pure returns (uint256) {
+    function hash(uint256[] memory x, uint256 field) internal pure returns (uint256) {
         return uint256(keccak256(abi.encodePacked(x))) % field;
     }
 }
