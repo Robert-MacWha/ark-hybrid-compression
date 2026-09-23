@@ -78,3 +78,7 @@ topo_order_commits = true
 sort_commits = "oldest"
 # Process submodules commits
 recurse_submodules = false
+
+[bump]
+# Version to use for the first release, when no tags exist yet.
+initial_tag = "v0.1.0"

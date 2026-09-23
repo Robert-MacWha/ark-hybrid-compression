@@ -1,25 +1,24 @@
 check:
-    cargo check --all-targets --all-features
-    cargo clippy --all-targets --all-features -- -D warnings
-    cargo fmt --all -- --check
+    cd contracts && forge build
+    cd crates && cargo check --all-targets --all-features
+    cd crates && cargo clippy --all-targets --all-features -- -D warnings
+    cd crates && cargo fmt --all -- --check
 
 test:
-    cargo test --all-targets --all-features
+    cd contracts && forge test
+    cd crates && cargo test --all-targets --all-features
 
-release:
-    cargo check
-    cargo clippy
-    cargo package --list --allow-dirty
-    cargo publish --dry-run --allow-dirty
+release: check test
+    cd crates && cargo package --list --allow-dirty
+    cd crates && cargo publish --dry-run --allow-dirty
     git cliff --bump -o CHANGELOG.md
-    cargo set-version $(git cliff --bumped-version | sed 's/^v//')
+    cd crates && cargo set-version $(git cliff --bumped-version | sed 's/^v//')
     echo "If everything looks good, run 'just publish' to push the release."
 
 publish:
     git add CHANGELOG.md
-    git add Cargo.lock
-    git add crates/websnark-rs/Cargo.toml
-    git add crates/websnark-cli/Cargo.toml
+    git add crates/Cargo.lock
+    git add crates/Cargo.toml
     git commit -m "chore: release $(git cliff --bumped-version)"
     git tag "$(git cliff --bumped-version)" -m "Release: $(git cliff --bumped-version)"
     git push && git push --tags 
