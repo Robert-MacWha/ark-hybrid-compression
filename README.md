@@ -37,6 +37,8 @@ impl CompressibleCircuit<Fr> for SumCircuit {
     type Statement = SumStatement;
 
     fn verify(&self, cs: &ConstraintSystemRef<Fr>) -> Result<SumStatement, SynthesisError> {
+        // Inner circuit's constraints against the statement. Any public values 
+        // must be allocated as `FpVar`s, then returned in the `Statement` struct.
         let values: Vec<FpVar<Fr>> = self
             .values
             .iter()
