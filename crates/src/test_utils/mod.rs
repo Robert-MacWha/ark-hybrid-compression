@@ -1,6 +1,6 @@
-//! Test fixtures shared by the crate's unit tests and the integration test.
-//! Available to in-crate tests automatically; external targets need the
-//! `test-utils` feature.
+#![cfg(any(test, feature = "test-utils"))]
+
+//! Test fixtures shared by the crate's unit and integration tests.
 
 pub mod circuit;
 pub mod poseidon;

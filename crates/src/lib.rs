@@ -4,7 +4,6 @@ pub mod circuit;
 pub mod hybrid_compression;
 #[cfg(feature = "alloy")]
 mod keccak;
-#[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 mod uhf;
 
