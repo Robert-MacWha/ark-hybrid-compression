@@ -11,7 +11,7 @@ categories = ["cryptography"]
 exclude = [".gitignore"]
 
 [features]
-default = []
+default = ["alloy"]
 alloy = ["alloy-primitives"]
 test-utils = []
 

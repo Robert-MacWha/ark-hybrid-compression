@@ -22,7 +22,7 @@ pub struct ExampleStatement<F: PrimeField> {
     pub sum: FpVar<F>,
 }
 
-impl<F: PrimeField> CompressibleCircuit<F, 4> for ExampleCircuit<F> {
+impl<F: PrimeField> CompressibleCircuit<F> for ExampleCircuit<F> {
     type Statement = ExampleStatement<F>;
 
     fn verify(&self, cs: &ConstraintSystemRef<F>) -> Result<ExampleStatement<F>, SynthesisError> {
@@ -37,9 +37,9 @@ impl<F: PrimeField> CompressibleCircuit<F, 4> for ExampleCircuit<F> {
     }
 }
 
-impl<F: PrimeField> Flatten<F, 4> for ExampleStatement<F> {
-    fn flatten(&self) -> Result<[FpVar<F>; 4], SynthesisError> {
-        Ok([
+impl<F: PrimeField> Flatten<F> for ExampleStatement<F> {
+    fn flatten(&self) -> Result<Vec<FpVar<F>>, SynthesisError> {
+        Ok(vec![
             self.a.clone(),
             self.b.clone(),
             self.c.clone(),

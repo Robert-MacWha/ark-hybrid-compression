@@ -11,7 +11,7 @@ pub mod constraints;
 /// (Construction 2). Returns the pair `(beta, gamma)`.
 ///
 /// `alpha` is the counterpart hash computed *outside* the circuit (e.g. by
-/// [`crate::keccak::KeccakCRH`] / `LibHybridCompression.hash` in Solidity)
+/// `KeccakCRH` / `LibHybridCompression.hash` in Solidity)
 /// over the same `stmt`. `CRH` computes `beta`, the circuit-friendly hash
 /// (e.g. Poseidon) over `stmt`.
 ///
@@ -39,7 +39,6 @@ mod test {
 
     use ark_crypto_primitives::crh::poseidon::constraints::CRHParametersVar;
     use ark_ed_on_bn254::Fr;
-    use ark_ff::UniformRand;
     use ark_r1cs_std::{GR1CSVar, alloc::AllocVar, fields::fp::FpVar};
     use ark_relations::gr1cs::ConstraintSystem;
 
@@ -48,14 +47,13 @@ mod test {
 
     #[test]
     fn test_impls_agree() {
-        let mut rng = ark_std::test_rng();
         let cs = ConstraintSystem::<Fr>::new_ref();
 
-        let params = poseidon_params::<Fr>(&mut rng);
+        let params = poseidon_params::<Fr>();
         let params_var = CRHParametersVar::new_input(cs.clone(), || Ok(&params)).unwrap();
 
-        let alpha = Fr::rand(&mut rng);
-        let x: [Fr; 10] = from_fn(|_| Fr::rand(&mut rng));
+        let alpha = Fr::from(42u64);
+        let x: [Fr; 10] = from_fn(|i| Fr::from(i as u64));
         let alpha_var = FpVar::<Fr>::new_input(cs.clone(), || Ok(alpha)).unwrap();
         let x_var = x
             .iter()

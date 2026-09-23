@@ -42,10 +42,8 @@ async fn circuit_matches_solidity() {
         .await
         .unwrap();
 
-    let mut rng = ark_std::test_rng();
-    let poseidon_params = poseidon_params::<Fr>(&mut rng);
-
-    let [a, b, c]: [Fr; 3] = from_fn(|_| Fr::rand(&mut rng));
+    let poseidon_params = poseidon_params();
+    let [a, b, c] = from_fn(|i| Fr::from(i as u64));
     let inner = ExampleCircuit {
         a,
         b,
@@ -53,24 +51,16 @@ async fn circuit_matches_solidity() {
         sum: a + b + c,
     };
     let mut circuit =
-        CompressedCircuit::<Fr, _, CRH<Fr>, CRHGadget<Fr>, 4>::new(poseidon_params, inner);
+        CompressedCircuit::<Fr, _, _, CRH<Fr>, CRHGadget<Fr>>::new_keccak(poseidon_params, inner);
 
-    // Runs the off-circuit computation `Usr` performs before proving (see
-    // Construction 2), then checks the relation is satisfied.
+    // Runs the off-circuit computation, then checks that the circuit is satisfied.
     let compressed = circuit.compress().unwrap();
     let cs = ConstraintSystem::<Fr>::new_ref();
     circuit.generate_constraints(cs.clone()).unwrap();
     assert!(cs.is_satisfied().unwrap());
 
-    let stmt_sol: Vec<U256> = compressed
-        .statement_var
-        .iter()
-        .copied()
-        .map(Fr::into)
-        .collect();
-
-    // Simulates what a real verifying contract would enforce: only the exact
-    // public inputs the (mock) prover produced are accepted.
+    // Authorize the proof if the on-chain computed alpha/gamma match the off-chain
+    // computed values.
     mock_arg_ver
         .authorize(vec![
             compressed.alpha.into(),
@@ -85,7 +75,14 @@ async fn circuit_matches_solidity() {
         .unwrap();
 
     contract
-        .submit(stmt_sol, compressed.beta.into(), vec![].into())
+        .submit(
+            compressed.statement.a.into(),
+            compressed.statement.b.into(),
+            compressed.statement.c.into(),
+            compressed.statement.sum.into(),
+            compressed.beta.into(),
+            vec![].into(),
+        )
         .call()
         .await
         .unwrap();
