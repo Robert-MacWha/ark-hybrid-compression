@@ -5,12 +5,12 @@ import {Test} from "forge-std/Test.sol";
 import {LibHybridCompression} from "../src/lib/LibHybridCompression.sol";
 
 contract LibHybridCompressionHarness {
-    function hybridCompression(uint256 beta, uint256[] calldata stmt, uint256 field)
+    function verifier(uint256 beta, uint256[] calldata stmt, uint256 field)
         public
         pure
         returns (uint256 alpha, uint256 gamma)
     {
-        return LibHybridCompression.hybridCompression(beta, stmt, field);
+        return LibHybridCompression.verifier(beta, stmt, field);
     }
 
     function uhf(uint256 sigma, uint256[] calldata x, uint256 field) public pure returns (uint256 acc) {
@@ -45,6 +45,6 @@ contract LibHybridCompressionTest is Test {
         uint256 field = 97;
 
         vm.expectRevert();
-        harness.hybridCompression(field, stmt, field);
+        harness.verifier(field, stmt, field);
     }
 }

@@ -1,12 +1,11 @@
-#![doc = include_str!("../../README.md")]
+#![doc = include_str!("../README.md")]
 
 pub mod circuit;
-mod hybrid_compression;
+pub mod hybrid_compression;
 #[cfg(feature = "alloy")]
 mod keccak;
+pub mod test_utils;
 mod uhf;
-
-pub use hybrid_compression::{constraints, hybrid_compression};
 
 #[cfg(feature = "alloy")]
 pub use keccak::KeccakCRH;
