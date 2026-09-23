@@ -12,7 +12,7 @@ release: check test
     cd crates && cargo package --list --allow-dirty
     cd crates && cargo publish --dry-run --allow-dirty
     git cliff --bump -o CHANGELOG.md
-    cd crates && cargo set-version $(git cliff --bumped-version | sed 's/^v//')
+    cargo set-version --manifest-path crates/Cargo.toml $(git cliff --bumped-version | sed 's/^v//')
     @echo "If everything looks good for $(git cliff --bumped-version), run 'just publish' to push the release."
 
 publish:
