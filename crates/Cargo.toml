@@ -1,11 +1,11 @@
 [package]
 name = "ark-hybrid-compression"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 description = "Arkworks Hybrid Compression"
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/Robert-MacWha/ark-hybrid-profiler"
+repository = "https://github.com/Robert-MacWha/ark-hybrid-compression"
 keywords = ["ark", "circuit", "snark"]
 categories = ["cryptography"]
 exclude = [".gitignore"]
