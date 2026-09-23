@@ -30,7 +30,7 @@ contract HybridCompressionExample {
         stmt[2] = c;
         stmt[3] = sum;
 
-        (uint256 alpha, uint256 gamma) = LibHybridCompression.hybridCompression(beta, stmt, field);
+        (uint256 alpha, uint256 gamma) = LibHybridCompression.verifier(beta, stmt, field);
 
         uint256[] memory publicInputs = new uint256[](3);
         publicInputs[0] = alpha;

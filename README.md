@@ -6,9 +6,9 @@ This algorithm is designed to cheaply compress arbitrarily large public statemen
 
 ## Examples
 
-### Compressing an inner arkworks circuit
+### Compressing an arkworks circuit
 
-Arkworks circuits can be compressed by implementing the [`CompressibleCircuit`] trait.
+Arkworks circuits can be compressed by implementing the `CompressibleCircuit` trait.
 
 ```rust
 use ark_crypto_primitives::{
@@ -59,25 +59,25 @@ impl Flatten<Fr> for SumStatement {
     }
 }
 
-// Arbitrary values to sum
+// Arbitrary values for the circuit statement.
 let values: [Fr; 8] = core::array::from_fn(|i| Fr::from(i as u64));
 let inner = SumCircuit { values, total: Fr::from(28u64) };
 
-// Poseidon parameters for the in-circuit `beta` hash.
+// Poseidon parameters for the beta CRH.
 let (ark, mds) = find_poseidon_ark_and_mds::<Fr>(Fr::MODULUS_BIT_SIZE as u64, 2, 8, 24, 0);
 let beta_params = PoseidonConfig::new(8, 24, 31, mds, ark, 2, 1);
 
-// Wrap the inner circuit to compress its statement.
+// Wrap the inner circuit in a `CompressedCircuit` that implements the hybrid 
+// compression algorithm.
 let mut circuit =
     CompressedCircuit::<Fr, _, _, CRH<Fr>, CRHGadget<Fr>>::new_keccak(beta_params, inner);
+let compressed = circuit.compress().unwrap();
 
-// Synthesize the constraint system (or generate a real proof).
 let cs = ConstraintSystem::<Fr>::new_ref();
 circuit.generate_constraints(cs.clone()).unwrap();
 assert!(cs.is_satisfied().unwrap());
 
-// The inner circuit's 9 instance variables are compressed down to 3!
-let compressed = circuit.compress().unwrap();
+// The 9 statement elements are compressed down to 3 public inputs.
 assert_eq!(compressed.statement_var.len(), 9);
 assert_eq!(
     cs.instance_assignment().unwrap(),
@@ -85,8 +85,48 @@ assert_eq!(
 );
 ```
 
-### Verifying a compressed statement
+### Verifying a compressed statement in Rust
 
+A verifier holding (`beta`, `stmt`) can recover the compressed public inputs (`alpha`, `beta`, `gamma`) and use that to verify the zk proof. 
+
+```rust
+use ark_ed_on_bn254::Fr;
+use ark_hybrid_compression::{KeccakCRH, hybrid_compression};
+
+let beta = Fr::from(12345u64);
+let stmt: Vec<Fr> = (0..9).map(Fr::from).collect();
+
+let (alpha, gamma) =
+    hybrid_compression::verifier::<KeccakCRH<Fr>, Fr>(&(), beta, &stmt).unwrap();
+let public_inputs = [alpha, beta, gamma];
+
+// Verify the zk proof against the compressed public inputs.
 ```
 
+### Verifying a compressed statement in Solidity
+
+A solidity verifier contract can use `LibHybridCompression.verifier` to recover the compressed public inputs (`alpha`, `beta`, `gamma`).
+
+NOTE: `LibHybridCompression` assumes that `keccak256` was used to compress the statement.
+
+```solidity
+import {LibHybridCompression} from "path/to/LibHybridCompression.sol";
+
+contract SumVerifier {
+    uint256 public constant FIELD = 255; // Arbitrary prime field modulus for the zk proof system.
+
+    function submit(uint256[] calldata stmt, uint256 beta, bytes calldata proof) external view {
+        (uint256 alpha, uint256 gamma) = LibHybridCompression.verifier(beta, stmt, field);
+
+        uint256[] memory publicInputs = new uint256[](3);
+        publicInputs[0] = alpha;
+        publicInputs[1] = beta;
+        publicInputs[2] = gamma;
+
+        // Verify the zk proof against the compressed public inputs.
+    }
+}
 ```
+
+A working version is at `contracts/src/examples/HybridCompressionExample.sol`, exercised
+end-to-end against the Rust prover by `crates/tests/circuit_integration.rs`.

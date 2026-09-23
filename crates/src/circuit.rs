@@ -9,7 +9,7 @@ use ark_relations::gr1cs::{
     ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, OptimizationGoal, SynthesisError,
 };
 
-use crate::hybrid_compression::constraints::hybrid_compression;
+use crate::hybrid_compression::constraints;
 
 /// A circuit whose public inputs can be compressed.
 pub trait CompressibleCircuit<F: PrimeField> {
@@ -158,7 +158,7 @@ where
         let params_var = BetaCRHGadget::ParametersVar::new_constant(cs.clone(), &self.beta_params)?;
 
         let (beta_var, gamma_var) =
-            hybrid_compression::<BetaCRH, F, BetaCRHGadget>(&params_var, alpha_var, &stmt)?;
+            constraints::prover::<BetaCRH, F, BetaCRHGadget>(&params_var, alpha_var, &stmt)?;
 
         //? Expose the `beta` and `gamma` outputs as public outputs, enforcing equality with the
         //? computed values.
@@ -184,10 +184,10 @@ where
     AlphaCRH: CRHScheme<Input = [F], Output = F>,
     BetaCRH: CRHScheme<Input = [F], Output = F>,
 {
-    use crate::hybrid_compression::hybrid_compression;
+    use crate::hybrid_compression::prover;
 
     let alpha = AlphaCRH::evaluate(alpha_params, stmt)?;
-    let (beta, gamma) = hybrid_compression::<BetaCRH, F>(beta_params, alpha, stmt)?;
+    let (beta, gamma) = prover::<BetaCRH, F>(beta_params, alpha, stmt)?;
     Ok((alpha, beta, gamma))
 }
 

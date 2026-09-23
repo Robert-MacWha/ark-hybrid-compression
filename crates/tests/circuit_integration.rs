@@ -1,12 +1,11 @@
 use std::array::from_fn;
 
 use alloy::{
-    node_bindings::Anvil, primitives::U256, providers::ProviderBuilder,
-    signers::local::PrivateKeySigner, sol,
+    node_bindings::Anvil, providers::ProviderBuilder, signers::local::PrivateKeySigner, sol,
 };
 use ark_crypto_primitives::crh::poseidon::{CRH, constraints::CRHGadget};
 use ark_ed_on_bn254::Fr;
-use ark_ff::{PrimeField, UniformRand};
+use ark_ff::PrimeField;
 use ark_hybrid_compression::{
     circuit::CompressedCircuit,
     test_utils::{ExampleCircuit, poseidon_params},
@@ -76,10 +75,10 @@ async fn circuit_matches_solidity() {
 
     contract
         .submit(
-            compressed.statement.a.into(),
-            compressed.statement.b.into(),
-            compressed.statement.c.into(),
-            compressed.statement.sum.into(),
+            a.into(),
+            b.into(),
+            c.into(),
+            (a + b + c).into(),
             compressed.beta.into(),
             vec![].into(),
         )

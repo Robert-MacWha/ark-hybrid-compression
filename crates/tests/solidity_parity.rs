@@ -33,7 +33,7 @@ async fn native_hash_matches_solidity() {
 }
 
 #[tokio::test]
-async fn native_hybrid_compression_matches_solidity() {
+async fn verifier_matches_solidity() {
     let anvil = Anvil::new().try_spawn().unwrap();
     let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
     let provider = ProviderBuilder::new()
@@ -45,16 +45,17 @@ async fn native_hybrid_compression_matches_solidity() {
     let stmt: Vec<Fr> = (0..10).map(Fr::from).collect();
     let sol_stmt: Vec<U256> = stmt.clone().into_iter().map(Fr::into).collect();
 
-    let alpha = Fr::from(42);
-    let (beta, gamma) = hybrid_compression::<KeccakCRH<Fr>, Fr>(&(), alpha, &stmt).unwrap();
-    let (beta, gamma): (U256, U256) = (beta.into(), gamma.into());
+    let beta = Fr::from(42);
+    let (alpha, gamma) =
+        hybrid_compression::verifier::<KeccakCRH<Fr>, Fr>(&(), beta, &stmt).unwrap();
+    let (alpha, gamma): (U256, U256) = (alpha.into(), gamma.into());
     let (sol_alpha, sol_gamma) = contract
-        .hybridCompression(alpha.into(), sol_stmt, field)
+        .verifier(beta.into(), sol_stmt, field)
         .call()
         .await
         .unwrap()
         .into();
 
-    assert_eq!(beta, sol_alpha);
+    assert_eq!(alpha, sol_alpha);
     assert_eq!(gamma, sol_gamma);
 }

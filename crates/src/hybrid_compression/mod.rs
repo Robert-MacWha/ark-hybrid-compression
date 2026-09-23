@@ -7,30 +7,50 @@ use crate::uhf::uhf;
 
 pub mod constraints;
 
-/// Computes the values used by the circuit-side of hybrid compression
-/// (Construction 2). Returns the pair `(beta, gamma)`.
+/// Computes `(beta, gamma)` for the given `alpha`.
 ///
-/// `alpha` is the counterpart hash computed *outside* the circuit (e.g. by
-/// `KeccakCRH` / `LibHybridCompression.hash` in Solidity)
-/// over the same `stmt`. `CRH` computes `beta`, the circuit-friendly hash
-/// (e.g. Poseidon) over `stmt`.
-///
-/// See [`constraints::hybrid_compression`] for the in-circuit gadget.
+/// See [`constraints::prover`] for the in-circuit gadget.
 ///
 /// <https://eprint.iacr.org/2025/1500.pdf>
-pub fn hybrid_compression<CRH, F>(
+pub fn prover<BetaCRH, F>(
+    beta_params: &BetaCRH::Parameters,
+    alpha: F,
+    stmt: &[F],
+) -> Result<(F, F), ark_crypto_primitives::Error>
+where
+    BetaCRH: CRHScheme<Input = [F], Output = F>,
+    F: PrimeField,
+{
+    hybrid_compression::<BetaCRH, F>(beta_params, alpha, stmt)
+}
+
+/// Computes `(alpha, gamma)` from the `beta` the prover sent.
+///
+/// <https://eprint.iacr.org/2025/1500.pdf>
+pub fn verifier<AlphaCRH, F>(
+    alpha_params: &AlphaCRH::Parameters,
+    beta: F,
+    stmt: &[F],
+) -> Result<(F, F), ark_crypto_primitives::Error>
+where
+    AlphaCRH: CRHScheme<Input = [F], Output = F>,
+    F: PrimeField,
+{
+    hybrid_compression::<AlphaCRH, F>(alpha_params, beta, stmt)
+}
+
+fn hybrid_compression<CRH, F>(
     params: &CRH::Parameters,
-    alpha: CRH::Output,
-    stmt: &CRH::Input,
-) -> Result<(CRH::Output, CRH::Output), ark_crypto_primitives::Error>
+    known: F,
+    stmt: &[F],
+) -> Result<(F, F), ark_crypto_primitives::Error>
 where
     CRH: CRHScheme<Input = [F], Output = F>,
     F: PrimeField,
 {
-    let beta = CRH::evaluate(params, stmt)?;
-    let sigma = alpha + beta;
-    let gamma = uhf(sigma, stmt);
-    Ok((beta, gamma))
+    let computed = CRH::evaluate(params, stmt)?;
+    let gamma = uhf(known + computed, stmt);
+    Ok((computed, gamma))
 }
 
 #[cfg(test)]
@@ -61,12 +81,10 @@ mod test {
             .collect::<Vec<_>>();
 
         let (beta, gamma) =
-            hybrid_compression::<ark_crypto_primitives::crh::poseidon::CRH<Fr>, Fr>(
-                &params, alpha, &x,
-            )
-            .unwrap();
+            prover::<ark_crypto_primitives::crh::poseidon::CRH<Fr>, Fr>(&params, alpha, &x)
+                .unwrap();
 
-        let (beta_var, gamma_var) = constraints::hybrid_compression::<
+        let (beta_var, gamma_var) = constraints::prover::<
             ark_crypto_primitives::crh::poseidon::CRH<Fr>,
             Fr,
             ark_crypto_primitives::crh::poseidon::constraints::CRHGadget<Fr>,

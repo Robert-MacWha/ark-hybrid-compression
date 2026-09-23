@@ -39,3 +39,8 @@ required-features = ["alloy"]
 name = "circuit_integration"
 path = "tests/circuit_integration.rs"
 required-features = ["alloy", "test-utils"]
+
+[[test]]
+name = "verifier"
+path = "tests/verifier.rs"
+required-features = ["alloy", "test-utils"]
