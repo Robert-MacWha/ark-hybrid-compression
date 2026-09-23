@@ -44,6 +44,10 @@
               rustToolchain
               pkgs.bacon
               pkgs.foundry
+
+              pkgs.cargo-edit
+              pkgs.git-cliff
+              pkgs.just
             ];
           };
 
