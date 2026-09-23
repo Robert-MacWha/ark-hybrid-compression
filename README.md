@@ -115,9 +115,10 @@ NOTE: `LibHybridCompression` assumes that `keccak256` was used to compress the s
 import {LibHybridCompression} from "path/to/LibHybridCompression.sol";
 
 contract SumVerifier {
-    uint256 public constant FIELD = 255; // Arbitrary prime field modulus for the zk proof system.
+    // Arbitrary prime field modulus for the zk proof system.
+    uint256 public constant FIELD = 255;
 
-    function submit(uint256[] calldata stmt, uint256 beta, bytes calldata proof) external view {
+    function submit(uint256[] stmt, uint256 beta, bytes proof) external view {
         (uint256 alpha, uint256 gamma) = LibHybridCompression.verifier(beta, stmt, field);
 
         uint256[] memory publicInputs = new uint256[](3);
