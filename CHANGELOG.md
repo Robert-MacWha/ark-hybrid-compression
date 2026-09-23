@@ -1,3 +1,8 @@
+## [0.1.2] - 2026-09-23
+
+### 🐛 Bug Fixes
+
+- Set release workflow cargo.toml directory
 ## [0.1.1] - 2026-09-23
 
 ### 🐛 Bug Fixes
