@@ -1,7 +1,8 @@
 use std::array::from_fn;
 
 use alloy::{
-    node_bindings::Anvil, providers::ProviderBuilder, signers::local::PrivateKeySigner, sol,
+    providers::{Provider, ProviderBuilder},
+    sol,
 };
 use ark_crypto_primitives::crh::poseidon::{CRH, constraints::CRHGadget};
 use ark_ed_on_bn254::Fr;
@@ -23,17 +24,9 @@ sol!(
     "../contracts/out/MockArgVer.sol/MockArgVer.json"
 );
 
-/// End-to-end: the circuit produces `(alpha, beta, gamma)` as public inputs, the
-/// off-chain prover submits `(stmt, beta, proof)` to the contract, and the contract
-/// recomputes `alpha`/`gamma` on-chain from its own copy of `stmt` and checks the
-/// proof against them. This is the full Construction 2 flow.
 #[tokio::test]
 async fn circuit_matches_solidity() {
-    let anvil = Anvil::new().try_spawn().unwrap();
-    let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
-    let provider = ProviderBuilder::new()
-        .wallet(signer)
-        .connect_http(anvil.endpoint_url());
+    let provider = ProviderBuilder::new().connect_anvil_with_wallet().erased();
 
     let field = Fr::MODULUS.into();
     let mock_arg_ver = MockArgVer::deploy(provider.clone()).await.unwrap();
@@ -49,17 +42,17 @@ async fn circuit_matches_solidity() {
         c,
         sum: a + b + c,
     };
-    let mut circuit =
+    let circuit =
         CompressedCircuit::<Fr, _, _, CRH<Fr>, CRHGadget<Fr>>::new_keccak(poseidon_params, inner);
+    let compressed = circuit.compress().unwrap();
 
     // Runs the off-circuit computation, then checks that the circuit is satisfied.
-    let compressed = circuit.compress().unwrap();
     let cs = ConstraintSystem::<Fr>::new_ref();
     circuit.generate_constraints(cs.clone()).unwrap();
     assert!(cs.is_satisfied().unwrap());
 
-    // Authorize the proof if the on-chain computed alpha/gamma match the off-chain
-    // computed values.
+    // Authorize the proof if the on-chain computed alpha/beta/gamma match the
+    // off-chain values.
     mock_arg_ver
         .authorize(vec![
             compressed.alpha.into(),

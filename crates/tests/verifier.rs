@@ -14,7 +14,7 @@ fn compressed() -> Compressed<Fr, ExampleStatement<Fr>> {
     let b = Fr::rand(&mut rng);
     let c = Fr::rand(&mut rng);
 
-    let mut circuit = CompressedCircuit::<Fr, _, _, CRH<Fr>, CRHGadget<Fr>>::new_keccak(
+    let circuit = CompressedCircuit::<Fr, _, _, CRH<Fr>, CRHGadget<Fr>>::new_keccak(
         poseidon_params(),
         ExampleCircuit {
             a,
@@ -33,7 +33,7 @@ fn verifier_matches_prover() {
     let (alpha, gamma) = hybrid_compression::verifier::<KeccakCRH<Fr>, Fr>(
         &(),
         compressed.beta,
-        &compressed.statement_var,
+        &compressed.statement_raw,
     )
     .unwrap();
 
@@ -45,7 +45,7 @@ fn verifier_matches_prover() {
 fn verifier_rejects_tampered_statement() {
     let compressed = compressed();
 
-    let mut tampered = compressed.statement_var.clone();
+    let mut tampered = compressed.statement_raw.clone();
     tampered[0] += Fr::from(1u64);
 
     let (alpha, gamma) =

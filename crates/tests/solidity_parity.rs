@@ -1,6 +1,7 @@
 use alloy::{
-    node_bindings::Anvil, primitives::U256, providers::ProviderBuilder,
-    signers::local::PrivateKeySigner, sol,
+    primitives::U256,
+    providers::{Provider, ProviderBuilder},
+    sol,
 };
 use ark_crypto_primitives::crh::CRHScheme;
 use ark_ed_on_bn254::Fr;
@@ -15,11 +16,7 @@ sol!(
 
 #[tokio::test]
 async fn native_hash_matches_solidity() {
-    let anvil = Anvil::new().try_spawn().unwrap();
-    let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
-    let provider = ProviderBuilder::new()
-        .wallet(signer)
-        .connect_http(anvil.endpoint_url());
+    let provider = ProviderBuilder::new().connect_anvil_with_wallet().erased();
     let contract = LibHybridCompressionHarness::deploy(provider).await.unwrap();
 
     let field: U256 = Fr::MODULUS.into();
@@ -34,11 +31,7 @@ async fn native_hash_matches_solidity() {
 
 #[tokio::test]
 async fn verifier_matches_solidity() {
-    let anvil = Anvil::new().try_spawn().unwrap();
-    let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
-    let provider = ProviderBuilder::new()
-        .wallet(signer)
-        .connect_http(anvil.endpoint_url());
+    let provider = ProviderBuilder::new().connect_anvil_with_wallet().erased();
     let contract = LibHybridCompressionHarness::deploy(provider).await.unwrap();
 
     let field: U256 = Fr::MODULUS.into();

@@ -38,9 +38,9 @@ pub struct Compressed<F, S> {
     pub gamma: F,
 
     /// The statement as flat field values, in [`Flatten`] order.
-    pub statement_var: Vec<F>,
+    pub statement_raw: Vec<F>,
 
-    /// The inner circuit's raw statement.
+    /// The inner circuit's structured statement.
     pub statement: S,
 }
 
@@ -54,7 +54,6 @@ where
     BetaCRH: CRHScheme<Input = [F], Output = F>,
     BetaCRHGadget: CRHSchemeGadget<BetaCRH, F, InputVar = [FpVar<F>], OutputVar = FpVar<F>>,
 {
-    pub alpha: F,
     pub alpha_params: AlphaCRH::Parameters,
     pub beta_params: BetaCRH::Parameters,
     pub inner: C,
@@ -103,7 +102,6 @@ where
         inner: C,
     ) -> Self {
         Self {
-            alpha: F::default(),
             alpha_params,
             beta_params,
             inner,
@@ -113,27 +111,34 @@ where
 
     /// Runs inner's `verify` method to witness the circuit, then flattens and
     /// compresses its statement.
-    pub fn compress(&mut self) -> Result<Compressed<F, C::Statement>, CompressError> {
+    pub fn compress(&self) -> Result<Compressed<F, C::Statement>, CompressError> {
         let cs = ConstraintSystem::new_ref();
         cs.set_optimization_goal(OptimizationGoal::Constraints);
         let statement = self.inner.verify(&cs)?;
         cs.finalize();
 
-        let statement_var: Vec<F> = statement
+        self.compress_with_statement(statement)
+    }
+
+    fn compress_with_statement(
+        &self,
+        statement: C::Statement,
+    ) -> Result<Compressed<F, C::Statement>, CompressError> {
+        let statement_raw: Vec<F> = statement
             .flatten()?
             .iter()
             .map(GR1CSVar::value)
             .collect::<Result<_, _>>()?;
+
         let (alpha, beta, gamma) =
-            compress::<F, AlphaCRH, BetaCRH>(&self.alpha_params, &self.beta_params, &statement_var)
+            compress::<F, AlphaCRH, BetaCRH>(&self.alpha_params, &self.beta_params, &statement_raw)
                 .map_err(|e| CompressError::Compression(e.to_string()))?;
 
-        self.alpha = alpha;
         Ok(Compressed {
             alpha,
             beta,
             gamma,
-            statement_var,
+            statement_raw,
             statement,
         })
     }
@@ -152,9 +157,10 @@ where
         //? Compute and flatten the statement
         let statement = self.inner.verify(&cs)?;
         let stmt = statement.flatten()?;
+        let compressed = self.compress_with_statement(statement)?;
 
         //? Enforce hybrid compression of the flattened statement
-        let alpha_var = FpVar::new_input(cs.clone(), || Ok(self.alpha))?;
+        let alpha_var = FpVar::new_input(cs.clone(), || Ok(compressed.alpha))?;
         let params_var = BetaCRHGadget::ParametersVar::new_constant(cs.clone(), &self.beta_params)?;
 
         let (beta_var, gamma_var) =
@@ -191,6 +197,15 @@ where
     Ok((alpha, beta, gamma))
 }
 
+impl From<CompressError> for SynthesisError {
+    fn from(value: CompressError) -> Self {
+        match value {
+            CompressError::Synthesis(s) => s,
+            CompressError::Compression(_) => SynthesisError::Unsatisfiable,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use ark_crypto_primitives::crh::poseidon::{CRH, constraints::CRHGadget};
@@ -222,36 +237,22 @@ mod test {
         let inner = test_circuit(&mut rng);
         let stmt = vec![inner.a, inner.b, inner.c, inner.sum];
 
-        let mut circuit = TestCompressed::new(params.clone(), params.clone(), inner);
+        let circuit = TestCompressed::new(params.clone(), params.clone(), inner);
         let compressed = circuit.compress().unwrap();
 
         let (alpha, beta, gamma) =
             compress::<Fr, CRH<Fr>, CRH<Fr>>(&params, &params, &stmt).unwrap();
-        assert_eq!(compressed.statement_var, stmt);
+        assert_eq!(compressed.statement_raw, stmt);
         assert_eq!(compressed.alpha, alpha);
         assert_eq!(compressed.beta, beta);
         assert_eq!(compressed.gamma, gamma);
-        assert_eq!(circuit.alpha, alpha);
-    }
-
-    #[test]
-    fn test_constraints_satisfied() {
-        let mut rng = ark_std::test_rng();
-        let params = poseidon_params();
-        let mut circuit = TestCompressed::new(params.clone(), params, test_circuit(&mut rng));
-        circuit.compress().unwrap();
-
-        let cs = ConstraintSystem::<Fr>::new_ref();
-        circuit.generate_constraints(cs.clone()).unwrap();
-
-        assert!(cs.is_satisfied().unwrap());
     }
 
     #[test]
     fn test_public_inputs_are_alpha_beta_gamma() {
         let mut rng = ark_std::test_rng();
         let params = poseidon_params();
-        let mut circuit = TestCompressed::new(params.clone(), params, test_circuit(&mut rng));
+        let circuit = TestCompressed::new(params.clone(), params, test_circuit(&mut rng));
         let compressed = circuit.compress().unwrap();
 
         let cs = ConstraintSystem::<Fr>::new_ref();
@@ -270,6 +271,17 @@ mod test {
     }
 
     #[test]
+    fn test_constraints_satisfied() {
+        let mut rng = ark_std::test_rng();
+        let params = poseidon_params();
+        let circuit = TestCompressed::new(params.clone(), params, test_circuit(&mut rng));
+
+        let cs = ConstraintSystem::<Fr>::new_ref();
+        circuit.generate_constraints(cs.clone()).unwrap();
+        assert!(cs.is_satisfied().unwrap());
+    }
+
+    #[test]
     fn test_bad_witness_unsatisfied() {
         let params = poseidon_params();
         let inner = ExampleCircuit {
@@ -280,12 +292,10 @@ mod test {
         };
 
         // Compression only reads the flattened values, so it still succeeds.
-        let mut circuit = TestCompressed::new(params.clone(), params, inner);
-        circuit.compress().unwrap();
+        let circuit = TestCompressed::new(params.clone(), params, inner);
 
         let cs = ConstraintSystem::<Fr>::new_ref();
         circuit.generate_constraints(cs.clone()).unwrap();
-
         assert!(!cs.is_satisfied().unwrap());
     }
 }

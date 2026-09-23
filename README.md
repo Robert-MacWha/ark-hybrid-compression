@@ -4,6 +4,8 @@ Ark-compatible implementation of the hybrid compression algorithm described in [
 
 This algorithm is designed to cheaply compress arbitrarily large public statements for zk proofs into three field elements. Since the gas cost to verify a zk proof scales with the number of public inputs, this can significantly reduce verification costs.
 
+See [khovratovich/two-worlds-ref](https://github.com/khovratovich/two-worlds-ref) for the reference implementation in circom / js.
+
 ## Examples
 
 ### Compressing an arkworks circuit
@@ -69,7 +71,7 @@ let beta_params = PoseidonConfig::new(8, 24, 31, mds, ark, 2, 1);
 
 // Wrap the inner circuit in a `CompressedCircuit` that implements the hybrid 
 // compression algorithm.
-let mut circuit =
+let circuit =
     CompressedCircuit::<Fr, _, _, CRH<Fr>, CRHGadget<Fr>>::new_keccak(beta_params, inner);
 let compressed = circuit.compress().unwrap();
 
@@ -78,7 +80,7 @@ circuit.generate_constraints(cs.clone()).unwrap();
 assert!(cs.is_satisfied().unwrap());
 
 // The 9 statement elements are compressed down to 3 public inputs.
-assert_eq!(compressed.statement_var.len(), 9);
+assert_eq!(compressed.statement_raw.len(), 9);
 assert_eq!(
     cs.instance_assignment().unwrap(),
     vec![Fr::from(1u64), compressed.alpha, compressed.beta, compressed.gamma],
