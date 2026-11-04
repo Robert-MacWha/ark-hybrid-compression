@@ -25,7 +25,7 @@ import ArkR1CS.Basic
 
 namespace ArkR1CS
 
-variable {F : Type} [Field F]
+variable {F : Type}
 
 /-- A circuit computation: given the current offsets, produce an output and
 the operations performed. -/
@@ -75,6 +75,8 @@ end Circuit
 
 /-! ### Evaluable outputs -/
 
+variable [Field F]
+
 /-- Output types of gadgets that can be evaluated under an assignment.
 `eval` is the value under an arbitrary assignment, `val` the value cached
 by the prover while synthesising, `below` well-scopedness. -/
@@ -88,7 +90,7 @@ class Eval (F : Type) [Field F] (T : Type) (V : outParam Type) where
 
 /-- The prover's cached value agrees with the evaluation under `a`. -/
 def Consistent {T V : Type} [Eval F T V] (a : Assignment F) (t : T) : Prop :=
-  Eval.eval a t = Eval.val t
+  Eval.eval a t = Eval.val (F := F) t
 
 theorem Consistent.extend {T V : Type} [Eval F T V] {off : Offsets} {a₀ : Assignment F}
     {ops : List (Op F)} {t : T} (hb : Eval.below (F := F) off t) (hc : Consistent a₀ t) :
@@ -99,14 +101,15 @@ theorem Consistent.extend {T V : Type} [Eval F T V] {off : Offsets} {a₀ : Assi
 
 instance instEvalList {T V : Type} [Eval F T V] : Eval F (List T) (List V) where
   eval a l := l.map (Eval.eval a)
-  val l := l.map Eval.val
+  val l := l.map (Eval.val (F := F))
   below off l := ∀ t ∈ l, Eval.below (F := F) off t
-  below_mono l h hl := fun t ht => Eval.below_mono t h (hl t ht)
-  eval_extend off a ops l hl := List.map_congr_left fun t ht => Eval.eval_extend off a ops t (hl t ht)
+  below_mono _ h hl := fun t ht => Eval.below_mono t h (hl t ht)
+  eval_extend off a ops _ hl :=
+    List.map_congr_left fun t ht => Eval.eval_extend off a ops t (hl t ht)
 
 instance instEvalProd {T V U W : Type} [Eval F T V] [Eval F U W] : Eval F (T × U) (V × W) where
   eval a p := (Eval.eval a p.1, Eval.eval a p.2)
-  val p := (Eval.val p.1, Eval.val p.2)
+  val p := (Eval.val (F := F) p.1, Eval.val (F := F) p.2)
   below off p := Eval.below (F := F) off p.1 ∧ Eval.below (F := F) off p.2
   below_mono p h hp := ⟨Eval.below_mono p.1 h hp.1, Eval.below_mono p.2 h hp.2⟩
   eval_extend off a ops p hp := by
@@ -118,6 +121,25 @@ instance instEvalUnit : Eval F Unit Unit where
   below _ _ := True
   below_mono _ _ _ := trivial
   eval_extend _ _ _ _ _ := rfl
+
+@[simp] theorem Eval.eval_list {T V : Type} [Eval F T V] (a : Assignment F) (l : List T) :
+    Eval.eval a l = l.map (Eval.eval a) := rfl
+
+@[simp] theorem Eval.val_list {T V : Type} [Eval F T V] (l : List T) :
+    Eval.val (F := F) l = l.map (Eval.val (F := F)) := rfl
+
+@[simp] theorem Eval.below_list {T V : Type} [Eval F T V] (off : Offsets) (l : List T) :
+    Eval.below (F := F) off l = ∀ t ∈ l, Eval.below (F := F) off t := rfl
+
+@[simp] theorem Eval.eval_prod {T V U W : Type} [Eval F T V] [Eval F U W] (a : Assignment F)
+    (p : T × U) : Eval.eval a p = (Eval.eval a p.1, Eval.eval a p.2) := rfl
+
+@[simp] theorem Eval.val_prod {T V U W : Type} [Eval F T V] [Eval F U W] (p : T × U) :
+    Eval.val (F := F) p = (Eval.val (F := F) p.1, Eval.val (F := F) p.2) := rfl
+
+@[simp] theorem Eval.below_prod {T V U W : Type} [Eval F T V] [Eval F U W] (off : Offsets)
+    (p : T × U) :
+    Eval.below (F := F) off p = (Eval.below (F := F) off p.1 ∧ Eval.below (F := F) off p.2) := rfl
 
 theorem Consistent.prod {T V U W : Type} [Eval F T V] [Eval F U W] {a : Assignment F}
     {t : T} {u : U} (ht : Consistent a t) (hu : Consistent a u) : Consistent a (t, u) :=

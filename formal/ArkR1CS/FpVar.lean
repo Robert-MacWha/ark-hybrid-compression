@@ -58,17 +58,23 @@ def below (off : Offsets) : FpVar F → Prop
 
 @[simp] theorem eval_const (a : Assignment F) (c : F) : eval a (const c) = c := rfl
 @[simp] theorem eval_lin (a : Assignment F) (lc : LC F) (v : F) : eval a (lin lc v) = lc.eval a := rfl
+omit [Field F] in
 @[simp] theorem val_const (c : F) : val (const c : FpVar F) = c := rfl
+omit [Field F] in
 @[simp] theorem val_lin (lc : LC F) (v : F) : val (lin lc v) = v := rfl
+omit [Field F] in
 @[simp] theorem below_const (off : Offsets) (c : F) : below off (const c) := trivial
+omit [Field F] in
 @[simp] theorem below_lin (off : Offsets) (lc : LC F) (v : F) : below off (lin lc v) ↔ lc.below off := Iff.rfl
 
 @[simp] theorem eval_toLC (a : Assignment F) (x : FpVar F) : x.toLC.eval a = x.eval a := by
   cases x <;> simp [toLC]
 
+omit [Field F] in
 theorem below_toLC {off : Offsets} {x : FpVar F} (h : x.below off) : x.toLC.below off := by
   cases x <;> simp_all [toLC, below, Variable.below]
 
+omit [Field F] in
 theorem below_mono {o₁ o₂ : Offsets} (h : o₁.le o₂) {x : FpVar F} (hx : x.below o₁) :
     x.below o₂ := by
   cases x with
@@ -129,19 +135,19 @@ theorem newInput_complete (v : F) (off : Offsets) (a₀ : Assignment F) :
     Complete (newInput v) off a₀ where
   holds := by simp
   wellScoped := by simp
-  below := by simp [FpVar.below, LC.below, Variable.below, Op.inputCount]
+  below := by simp [FpVar.below, LC.below, Variable.below]
   consistent := by
     rw [consistent_iff]
-    simp [extend_input_fresh]
+    simp [Assignment.setInput]
 
 theorem newWitness_complete (v : F) (off : Offsets) (a₀ : Assignment F) :
     Complete (newWitness v) off a₀ where
   holds := by simp
   wellScoped := by simp
-  below := by simp [FpVar.below, LC.below, Variable.below, Op.witnessCount]
+  below := by simp [FpVar.below, LC.below, Variable.below]
   consistent := by
     rw [consistent_iff]
-    simp [extend_witness_fresh]
+    simp [Assignment.setWitness]
 
 /-! ### Addition (`impl Add for FpVar`) -/
 
@@ -155,14 +161,22 @@ def add : FpVar F → FpVar F → FpVar F
 
 @[simp] theorem eval_add (a : Assignment F) (x y : FpVar F) :
     (x.add y).eval a = x.eval a + y.eval a := by
-  cases x <;> cases y <;> simp [add]
+  cases x <;> cases y <;> simp [add, add_comm]
 
 @[simp] theorem val_add (x y : FpVar F) : (x.add y).val = x.val + y.val := by
   cases x <;> cases y <;> simp [add]
 
 theorem below_add {off : Offsets} {x y : FpVar F} (hx : x.below off) (hy : y.below off) :
     (x.add y).below off := by
-  cases x <;> cases y <;> simp_all [add, LC.below, Variable.below]
+  cases x with
+  | const c₁ =>
+    cases y with
+    | const c₂ => trivial
+    | lin lc v => exact LC.below_append.mpr ⟨hy, by simp [LC.below, Variable.below]⟩
+  | lin lc₁ v₁ =>
+    cases y with
+    | const c => exact LC.below_append.mpr ⟨hx, by simp [LC.below, Variable.below]⟩
+    | lin lc₂ v₂ => exact LC.below_append.mpr ⟨hx, hy⟩
 
 theorem consistent_add {a : Assignment F} {x y : FpVar F} (hx : Consistent a x)
     (hy : Consistent a y) : Consistent a (x.add y) := by
@@ -220,7 +234,7 @@ theorem mul_sound (x y : FpVar F) (off : Offsets) (a : Assignment F)
       simp only [mul, constraintsHold_witness, constraintsHold_constrain, constraintsHold_nil,
         and_true, Constraint.holds, LC.eval_cons, LC.eval_nil, Variable.eval_witness, one_mul,
         add_zero] at h
-      simp [h]
+      simp [mul, h]
 
 theorem mul_inputCount (x y : FpVar F) (off : Offsets) :
     Op.inputCount ((x.mul y).run off).2 = 0 := by
@@ -264,9 +278,10 @@ theorem mul_complete (x y : FpVar F) (off : Offsets) (a₀ : Assignment F)
       · simp only [mul, constraintsBelow_witness, constraintsBelow_constrain, constraintsBelow_nil,
           and_true, Constraint.below, Offsets.advance_witness, Offsets.advance_constrain,
           Offsets.advance_nil]
-        refine ⟨LC.below_mono ⟨le_rfl, Nat.le_succ _⟩ hx, LC.below_mono ⟨le_rfl, Nat.le_succ _⟩ hy, ?_⟩
+        refine ⟨LC.below_mono (Offsets.le_succ_witnesses off) hx,
+          LC.below_mono (Offsets.le_succ_witnesses off) hy, ?_⟩
         simp [LC.below, Variable.below]
-      · simp [mul, FpVar.below, LC.below, Variable.below, Op.witnessCount]
+      · simp [mul, FpVar.below, LC.below, Variable.below]
       · rw [consistent_iff]
         simp only [mul, eval_lin, val_lin, LC.eval_cons, LC.eval_nil, Variable.eval_witness, one_mul,
           add_zero]
@@ -292,9 +307,9 @@ theorem eqConstraint_holds_iff (x y : FpVar F) (a : Assignment F) :
 theorem eqConstraint_below {off : Offsets} {x y : FpVar F} (hx : x.below off) (hy : y.below off) :
     (eqConstraint x y).below off := by
   refine ⟨?_, ?_, ?_⟩
-  · simp [LC.below_append, below_toLC hx, LC.below_scale (below_toLC hy)]
-  · simp [LC.below, Variable.below]
-  · simp
+  · exact LC.below_append.mpr ⟨below_toLC hx, LC.below_scale (below_toLC hy)⟩
+  · simp [eqConstraint, LC.below, Variable.below]
+  · exact LC.below_nil off
 
 /-- `lhs.enforce_equal(&rhs)`. -/
 def enforceEqual (x y : FpVar F) : Circuit F Unit :=

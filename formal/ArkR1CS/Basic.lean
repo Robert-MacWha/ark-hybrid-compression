@@ -29,6 +29,9 @@ import Mathlib.Algebra.BigOperators.Group.List.Basic
 import Mathlib.Logic.Function.Basic
 import Mathlib.Tactic.Ring
 
+set_option linter.unusedTactic false
+set_option linter.unnecessarySeqFocus false
+
 namespace ArkR1CS
 
 /-- An R1CS variable: the constant `one`, the `i`-th public input (instance
@@ -40,6 +43,7 @@ inductive Variable
   deriving DecidableEq, Repr
 
 /-- How many instance / witness variables have been allocated so far. -/
+@[ext]
 structure Offsets where
   inputs : Nat
   witnesses : Nat
@@ -54,6 +58,12 @@ theorem Offsets.le_refl (o : Offsets) : o.le o := ⟨le_rfl, le_rfl⟩
 
 theorem Offsets.le_trans {o₁ o₂ o₃ : Offsets} (h₁ : o₁.le o₂) (h₂ : o₂.le o₃) : o₁.le o₃ :=
   ⟨h₁.inputs.trans h₂.inputs, h₁.witnesses.trans h₂.witnesses⟩
+
+theorem Offsets.le_succ_inputs (o : Offsets) : o.le ⟨o.inputs + 1, o.witnesses⟩ :=
+  ⟨Nat.le_succ _, le_rfl⟩
+
+theorem Offsets.le_succ_witnesses (o : Offsets) : o.le ⟨o.inputs, o.witnesses + 1⟩ :=
+  ⟨le_rfl, Nat.le_succ _⟩
 
 /-- `v` refers to a variable that has already been allocated at `off`. -/
 def Variable.below (off : Offsets) : Variable → Prop
@@ -72,20 +82,20 @@ structure Assignment (F : Type) where
   input : Nat → F
   witness : Nat → F
 
-section Field
+section Structural
 
-variable {F : Type} [Field F]
+variable {F : Type}
 
 /-- Value of a variable under an assignment. -/
-def Variable.eval (a : Assignment F) : Variable → F
+def Variable.eval [Field F] (a : Assignment F) : Variable → F
   | .one => 1
   | .input i => a.input i
   | .witness i => a.witness i
 
-@[simp] theorem Variable.eval_one (a : Assignment F) : Variable.eval a .one = 1 := rfl
-@[simp] theorem Variable.eval_input (a : Assignment F) (i : Nat) :
+@[simp] theorem Variable.eval_one [Field F] (a : Assignment F) : Variable.eval a .one = 1 := rfl
+@[simp] theorem Variable.eval_input [Field F] (a : Assignment F) (i : Nat) :
     Variable.eval a (.input i) = a.input i := rfl
-@[simp] theorem Variable.eval_witness (a : Assignment F) (i : Nat) :
+@[simp] theorem Variable.eval_witness [Field F] (a : Assignment F) (i : Nat) :
     Variable.eval a (.witness i) = a.witness i := rfl
 
 /-- Linear combination `∑ cᵢ · vᵢ` (`LinearCombination<F>`). -/
@@ -94,24 +104,24 @@ abbrev LC (F : Type) := List (F × Variable)
 namespace LC
 
 /-- Value of a linear combination. -/
-def eval (a : Assignment F) (lc : LC F) : F := (lc.map fun t => t.1 * t.2.eval a).sum
+def eval [Field F] (a : Assignment F) (lc : LC F) : F := (lc.map fun t => t.1 * t.2.eval a).sum
 
 /-- Scale every coefficient by `c` (`LinearCombination * F`). -/
-def scale (c : F) (lc : LC F) : LC F := lc.map fun t => (c * t.1, t.2)
+def scale [Mul F] (c : F) (lc : LC F) : LC F := lc.map fun t => (c * t.1, t.2)
 
 /-- All variables of `lc` are allocated at `off`. -/
 def below (off : Offsets) (lc : LC F) : Prop := ∀ t ∈ lc, t.2.below off
 
-@[simp] theorem eval_nil (a : Assignment F) : eval a ([] : LC F) = 0 := rfl
+@[simp] theorem eval_nil [Field F] (a : Assignment F) : eval a ([] : LC F) = 0 := rfl
 
-@[simp] theorem eval_cons (a : Assignment F) (t : F × Variable) (lc : LC F) :
+@[simp] theorem eval_cons [Field F] (a : Assignment F) (t : F × Variable) (lc : LC F) :
     eval a (t :: lc) = t.1 * t.2.eval a + eval a lc := rfl
 
-@[simp] theorem eval_append (a : Assignment F) (l₁ l₂ : LC F) :
+@[simp] theorem eval_append [Field F] (a : Assignment F) (l₁ l₂ : LC F) :
     eval a (l₁ ++ l₂) = eval a l₁ + eval a l₂ := by
   simp [eval, List.map_append, List.sum_append]
 
-@[simp] theorem eval_scale (a : Assignment F) (c : F) (lc : LC F) :
+@[simp] theorem eval_scale [Field F] (a : Assignment F) (c : F) (lc : LC F) :
     eval a (scale c lc) = c * eval a lc := by
   induction lc with
   | nil => simp [scale]
@@ -131,7 +141,7 @@ def below (off : Offsets) (lc : LC F) : Prop := ∀ t ∈ lc, t.2.below off
     below off (l₁ ++ l₂) ↔ below off l₁ ∧ below off l₂ := by
   simp [below, or_imp, forall_and]
 
-theorem below_scale {off : Offsets} {c : F} {lc : LC F} (h : below off lc) :
+theorem below_scale [Mul F] {off : Offsets} {c : F} {lc : LC F} (h : below off lc) :
     below off (scale c lc) := by
   intro t ht
   simp only [scale, List.mem_map] at ht
@@ -154,7 +164,7 @@ structure Constraint (F : Type) where
 namespace Constraint
 
 /-- The row is satisfied by `x`. -/
-def holds (x : Assignment F) (k : Constraint F) : Prop :=
+def holds [Field F] (x : Assignment F) (k : Constraint F) : Prop :=
   k.a.eval x * k.b.eval x = k.c.eval x
 
 /-- All variables of the row are allocated at `off`. -/
@@ -203,13 +213,13 @@ theorem inputCount_append (l₁ l₂ : List (Op F)) :
     inputCount (l₁ ++ l₂) = inputCount l₁ + inputCount l₂ := by
   induction l₁ with
   | nil => simp [inputCount]
-  | cons op rest ih => cases op <;> simp [inputCount, ih] <;> omega
+  | cons op rest ih => cases op <;> simp [inputCount, ih, Nat.add_right_comm]
 
 theorem witnessCount_append (l₁ l₂ : List (Op F)) :
     witnessCount (l₁ ++ l₂) = witnessCount l₁ + witnessCount l₂ := by
   induction l₁ with
   | nil => simp [witnessCount]
-  | cons op rest ih => cases op <;> simp [witnessCount, ih] <;> omega
+  | cons op rest ih => cases op <;> simp [witnessCount, ih, Nat.add_right_comm]
 
 theorem constraints_append (l₁ l₂ : List (Op F)) :
     constraints (l₁ ++ l₂) = constraints l₁ ++ constraints l₂ := by
@@ -232,13 +242,11 @@ theorem Offsets.advance_append (off : Offsets) (l₁ l₂ : List (Op F)) :
 
 @[simp] theorem Offsets.advance_input (off : Offsets) (v : F) (rest : List (Op F)) :
     off.advance (.input v :: rest) = Offsets.advance ⟨off.inputs + 1, off.witnesses⟩ rest := by
-  simp only [Offsets.advance, Op.inputCount, Op.witnessCount, Offsets.mk.injEq]
-  omega
+  ext <;> simp only [Offsets.advance, Op.inputCount, Op.witnessCount] <;> omega
 
 @[simp] theorem Offsets.advance_witness (off : Offsets) (v : F) (rest : List (Op F)) :
     off.advance (.witness v :: rest) = Offsets.advance ⟨off.inputs, off.witnesses + 1⟩ rest := by
-  simp only [Offsets.advance, Op.inputCount, Op.witnessCount, Offsets.mk.injEq]
-  omega
+  ext <;> simp only [Offsets.advance, Op.inputCount, Op.witnessCount] <;> omega
 
 @[simp] theorem Offsets.advance_constrain (off : Offsets) (k : Constraint F) (rest : List (Op F)) :
     off.advance (.constrain k :: rest) = off.advance rest := by
@@ -256,28 +264,28 @@ theorem Offsets.le_advance (off : Offsets) (ops : List (Op F)) : off.le (off.adv
 /-! ### Constraint satisfaction (soundness side) -/
 
 /-- Every row contributed by `ops` is satisfied by `a`. -/
-def ConstraintsHold (a : Assignment F) (ops : List (Op F)) : Prop :=
+def ConstraintsHold [Field F] (a : Assignment F) (ops : List (Op F)) : Prop :=
   ∀ k ∈ Op.constraints ops, k.holds a
 
 /-- Every row contributed by `ops` only mentions variables allocated at `off`. -/
 def ConstraintsBelow (off : Offsets) (ops : List (Op F)) : Prop :=
   ∀ k ∈ Op.constraints ops, k.below off
 
-@[simp] theorem constraintsHold_nil (a : Assignment F) : ConstraintsHold a ([] : List (Op F)) := by
+@[simp] theorem constraintsHold_nil [Field F] (a : Assignment F) : ConstraintsHold a ([] : List (Op F)) := by
   simp [ConstraintsHold, Op.constraints]
 
-@[simp] theorem constraintsHold_input (a : Assignment F) (v : F) (rest : List (Op F)) :
+@[simp] theorem constraintsHold_input [Field F] (a : Assignment F) (v : F) (rest : List (Op F)) :
     ConstraintsHold a (.input v :: rest) ↔ ConstraintsHold a rest := Iff.rfl
 
-@[simp] theorem constraintsHold_witness (a : Assignment F) (v : F) (rest : List (Op F)) :
+@[simp] theorem constraintsHold_witness [Field F] (a : Assignment F) (v : F) (rest : List (Op F)) :
     ConstraintsHold a (.witness v :: rest) ↔ ConstraintsHold a rest := Iff.rfl
 
-@[simp] theorem constraintsHold_constrain (a : Assignment F) (k : Constraint F)
+@[simp] theorem constraintsHold_constrain [Field F] (a : Assignment F) (k : Constraint F)
     (rest : List (Op F)) :
     ConstraintsHold a (.constrain k :: rest) ↔ k.holds a ∧ ConstraintsHold a rest := by
   simp [ConstraintsHold, Op.constraints]
 
-@[simp] theorem constraintsHold_append (a : Assignment F) (l₁ l₂ : List (Op F)) :
+@[simp] theorem constraintsHold_append [Field F] (a : Assignment F) (l₁ l₂ : List (Op F)) :
     ConstraintsHold a (l₁ ++ l₂) ↔ ConstraintsHold a l₁ ∧ ConstraintsHold a l₂ := by
   simp [ConstraintsHold, Op.constraints_append, or_imp, forall_and]
 
@@ -342,7 +350,7 @@ theorem extend_append (off : Offsets) (a : Assignment F) (l₁ l₂ : List (Op F
   | nil => simp
   | cons op rest ih => cases op <;> simp [ih]
 
-theorem Variable.eval_setInput_of_below {off : Offsets} {v : Variable} (hv : v.below off)
+theorem Variable.eval_setInput_of_below [Field F] {off : Offsets} {v : Variable} (hv : v.below off)
     (a : Assignment F) (x : F) : v.eval (a.setInput off.inputs x) = v.eval a := by
   cases v with
   | one => rfl
@@ -351,7 +359,7 @@ theorem Variable.eval_setInput_of_below {off : Offsets} {v : Variable} (hv : v.b
     simp [Assignment.setInput, Function.update_of_ne (Nat.ne_of_lt hv)]
   | witness i => rfl
 
-theorem Variable.eval_setWitness_of_below {off : Offsets} {v : Variable} (hv : v.below off)
+theorem Variable.eval_setWitness_of_below [Field F] {off : Offsets} {v : Variable} (hv : v.below off)
     (a : Assignment F) (x : F) : v.eval (a.setWitness off.witnesses x) = v.eval a := by
   cases v with
   | one => rfl
@@ -361,7 +369,7 @@ theorem Variable.eval_setWitness_of_below {off : Offsets} {v : Variable} (hv : v
     simp [Assignment.setWitness, Function.update_of_ne (Nat.ne_of_lt hv)]
 
 /-- Extending the assignment never changes an already-allocated variable. -/
-theorem Variable.eval_extend_of_below {v : Variable} (off : Offsets) (a : Assignment F)
+theorem Variable.eval_extend_of_below [Field F] {v : Variable} (off : Offsets) (a : Assignment F)
     (ops : List (Op F)) (hv : v.below off) : v.eval (extend off a ops) = v.eval a := by
   induction ops generalizing off a with
   | nil => rfl
@@ -369,15 +377,15 @@ theorem Variable.eval_extend_of_below {v : Variable} (off : Offsets) (a : Assign
     cases op with
     | input x =>
       have hv' : v.below ⟨off.inputs + 1, off.witnesses⟩ :=
-        Variable.below_mono ⟨Nat.le_succ _, le_rfl⟩ hv
+        Variable.below_mono (Offsets.le_succ_inputs off) hv
       rw [extend_input, ih _ _ hv', Variable.eval_setInput_of_below hv]
     | witness x =>
       have hv' : v.below ⟨off.inputs, off.witnesses + 1⟩ :=
-        Variable.below_mono ⟨le_rfl, Nat.le_succ _⟩ hv
+        Variable.below_mono (Offsets.le_succ_witnesses off) hv
       rw [extend_witness, ih _ _ hv', Variable.eval_setWitness_of_below hv]
     | constrain k => rw [extend_constrain, ih _ _ hv]
 
-theorem LC.eval_extend_of_below {lc : LC F} (off : Offsets) (a : Assignment F)
+theorem LC.eval_extend_of_below [Field F] {lc : LC F} (off : Offsets) (a : Assignment F)
     (ops : List (Op F)) (hl : lc.below off) : lc.eval (extend off a ops) = lc.eval a := by
   induction lc with
   | nil => rfl
@@ -385,20 +393,20 @@ theorem LC.eval_extend_of_below {lc : LC F} (off : Offsets) (a : Assignment F)
     rw [LC.below_cons] at hl
     rw [LC.eval_cons, LC.eval_cons, Variable.eval_extend_of_below off a ops hl.1, ih hl.2]
 
-theorem Constraint.holds_extend_of_below {k : Constraint F} {off : Offsets} {a : Assignment F}
+theorem Constraint.holds_extend_of_below [Field F] {k : Constraint F} {off : Offsets} {a : Assignment F}
     {ops : List (Op F)} (hb : k.below off) (hk : k.holds a) : k.holds (extend off a ops) := by
   unfold Constraint.holds at hk ⊢
   rw [LC.eval_extend_of_below off a ops hb.1, LC.eval_extend_of_below off a ops hb.2.1,
     LC.eval_extend_of_below off a ops hb.2.2]
   exact hk
 
-theorem ConstraintsHold.extend_of_below {off : Offsets} {a : Assignment F} {ops ops' : List (Op F)}
+theorem ConstraintsHold.extend_of_below [Field F] {off : Offsets} {a : Assignment F} {ops ops' : List (Op F)}
     (hb : ConstraintsBelow off ops) (h : ConstraintsHold a ops) :
     ConstraintsHold (extend off a ops') ops :=
   fun k hk => Constraint.holds_extend_of_below (hb k hk) (h k hk)
 
 /-- A freshly allocated input receives the value the gadget computed for it. -/
-theorem extend_input_fresh (off : Offsets) (a : Assignment F) (v : F) (rest : List (Op F)) :
+theorem extend_input_fresh [Field F] (off : Offsets) (a : Assignment F) (v : F) (rest : List (Op F)) :
     (extend off a (.input v :: rest)).input off.inputs = v := by
   have h := Variable.eval_extend_of_below (v := .input off.inputs) ⟨off.inputs + 1, off.witnesses⟩
     (a.setInput off.inputs v) rest (by simp [Variable.below])
@@ -406,13 +414,13 @@ theorem extend_input_fresh (off : Offsets) (a : Assignment F) (v : F) (rest : Li
   simpa [Assignment.setInput] using h
 
 /-- A freshly allocated witness receives the value the gadget computed for it. -/
-theorem extend_witness_fresh (off : Offsets) (a : Assignment F) (v : F) (rest : List (Op F)) :
+theorem extend_witness_fresh [Field F] (off : Offsets) (a : Assignment F) (v : F) (rest : List (Op F)) :
     (extend off a (.witness v :: rest)).witness off.witnesses = v := by
   have h := Variable.eval_extend_of_below (v := .witness off.witnesses)
     ⟨off.inputs, off.witnesses + 1⟩ (a.setWitness off.witnesses v) rest (by simp [Variable.below])
   rw [extend_witness]
   simpa [Assignment.setWitness] using h
 
-end Field
+end Structural
 
 end ArkR1CS

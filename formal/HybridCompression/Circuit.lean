@@ -73,7 +73,7 @@ theorem compressedCircuit_sound' (H : CRHGadget F) (Hα : List F → F)
   have hγ := FpVar.exposeOutput_sound _ _ _ h₄
   simp only [FpVar.eval_lin, LC.eval_cons, LC.eval_nil, Variable.eval_input, one_mul, add_zero,
     Offsets.advance_inputs, Op.inputCount, proverGadget_inputCount, FpVar.exposeOutput_inputCount,
-    Nat.add_zero, Nat.zero_add] at hp hβ hγ
+    Nat.zero_add] at hp hβ hγ
   simp only [alphaIndex, statementOf, Offsets.advance_inputs]
   rw [show off.inputs + Op.inputCount (inner.run off).2 + 2 =
     off.inputs + Op.inputCount (inner.run off).2 + 1 + 1 from rfl, hβ, hγ]

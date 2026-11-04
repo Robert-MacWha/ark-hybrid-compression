@@ -46,22 +46,23 @@ theorem coeff_uhfPoly (s : List F) (i : Nat) : (uhfPoly s).coeff i = s.getD i 0 
   | nil => simp [uhfPoly]
   | cons x xs ih =>
     cases i with
-    | zero => simp [uhfPoly, coeff_X_mul_zero]
+    | zero => simp [uhfPoly]
     | succ n => simp [uhfPoly, coeff_X_mul, ih]
 
 theorem natDegree_uhfPoly_le (s : List F) : (uhfPoly s).natDegree ≤ s.length - 1 := by
   rw [natDegree_le_iff_coeff_eq_zero]
   intro N hN
-  rw [coeff_uhfPoly, List.getD_eq_default]
-  omega
+  rw [coeff_uhfPoly, List.getD_eq_getElem?_getD, List.getElem?_eq_none (by omega)]
+  rfl
 
 theorem uhfPoly_injective_of_length {s s' : List F} (hlen : s'.length = s.length)
     (h : uhfPoly s = uhfPoly s') : s = s' := by
   apply List.ext_getElem hlen.symm
   intro n hn hn'
   have := congrArg (fun p => coeff p n) h
-  simp only [coeff_uhfPoly] at this
-  rwa [List.getD_eq_getElem _ _ hn, List.getD_eq_getElem _ _ hn'] at this
+  simp only [coeff_uhfPoly, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hn,
+    List.getElem?_eq_getElem hn', Option.getD_some] at this
+  exact this
 
 /-- If two distinct statements of the same length collide under the UHF at
 `σ`, then `σ` is a root of their (non-zero) difference polynomial. -/
@@ -88,7 +89,7 @@ theorem uhf_collision_card_le [Fintype F] [DecidableEq F] {s s' : List F}
     _ ≤ max (uhfPoly s).natDegree (uhfPoly s').natDegree := natDegree_sub_le _ _
     _ ≤ s.length - 1 := by
         apply max_le (natDegree_uhfPoly_le s)
-        rw [hlen]
+        rw [← hlen]
         exact natDegree_uhfPoly_le s'
 
 /-- The same bound for seeds of the form `x + t` with `t` fixed: at most `n - 1`
@@ -101,7 +102,7 @@ theorem uhf_collision_shift_card_le [Fintype F] [DecidableEq F] {s s' : List F}
   refine le_trans ?_ (uhf_collision_card_le hlen hne)
   refine Finset.card_le_card_of_injOn (fun x => x + t) ?_ ?_
   · intro x hx
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hx ⊢
+    simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq] at hx ⊢
     exact hx
   · intro x _ y _ hxy
     exact add_right_cancel hxy
@@ -120,7 +121,7 @@ theorem binding (H : CRHGadget F) (Hα : List F → F) (inner : CompressibleCirc
     statementOf inner.verify off a = s' ∨
       Hα s' + β ∈ (uhfPoly (statementOf inner.verify off a) - uhfPoly s').roots := by
   obtain ⟨_, hsound⟩ := compressedCircuit_sound H Hα inner off a hacc
-  simp only [Prod.mk.injEq] at hpub
+  simp only [verifierNative, hybridCompression, Prod.mk.injEq] at hpub
   obtain ⟨hα, hβ, hγ⟩ := hpub
   simp only [proverNative, hybridCompression, Prod.mk.injEq] at hsound
   obtain ⟨hβ', hγ'⟩ := hsound
@@ -128,8 +129,9 @@ theorem binding (H : CRHGadget F) (Hα : List F → F) (inner : CompressibleCirc
   · exact Or.inl hs
   · right
     apply uhf_collision_mem_roots hlen hs
-    rw [← hβ', ← hα, ← hγ']
-    simp only [verifierNative, hybridCompression] at hγ ⊢
-    rw [hγ, hα, add_comm]
+    have hσ : Hα s' + β =
+        a.input (alphaIndex inner.verify off) + H.native (statementOf inner.verify off a) := by
+      rw [hα, ← hβ', hβ]
+    rw [hσ, ← hγ', hγ, ← hσ, add_comm]
 
 end HybridCompression

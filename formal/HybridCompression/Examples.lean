@@ -10,7 +10,7 @@
   arkworks constraint system compares.
 -/
 import HybridCompression.Circuit
-import Mathlib.Data.ZMod.Basic
+import Mathlib.Algebra.Field.ZMod
 import Mathlib.Tactic.NormNum.Prime
 
 namespace HybridCompression
@@ -35,14 +35,15 @@ theorem exampleCircuit_sound (a b c sum : F) (off : Offsets) (x : Assignment F)
     (h : ConstraintsHold x ((exampleCircuit a b c sum).run off).2) :
     exampleRel (((exampleCircuit a b c sum).run off).1.map (·.eval x)) := by
   simp only [exampleCircuit, Circuit.run_bind, Circuit.run_pure, FpVar.run_newWitness,
-    FpVar.run_enforceEqual, List.append_nil, List.singleton_append, List.cons_append,
-    constraintsHold_witness, constraintsHold_constrain, constraintsHold_nil, and_true] at h
-  rw [FpVar.eqConstraint_holds_iff] at h
+    FpVar.run_enforceEqual, List.append_nil, List.nil_append, List.cons_append,
+    constraintsHold_witness, constraintsHold_constrain, constraintsHold_nil,
+    and_true, FpVar.eqConstraint_holds_iff, FpVar.eval_add, FpVar.eval_lin, LC.eval_cons,
+    LC.eval_nil, Variable.eval_witness, one_mul, add_zero] at h
   simp only [exampleCircuit, Circuit.run_bind, Circuit.run_pure, FpVar.run_newWitness,
-    FpVar.run_enforceEqual, List.map_cons, List.map_nil, exampleRel]
-  simp only [FpVar.eval_add, FpVar.eval_lin, LC.eval_cons, LC.eval_nil, Variable.eval_witness,
-    one_mul, add_zero] at h ⊢
-  exact ⟨_, _, _, by rw [h]⟩
+    FpVar.run_enforceEqual, List.map_cons, List.map_nil, exampleRel, FpVar.eval_lin, LC.eval_cons,
+    LC.eval_nil, Variable.eval_witness, one_mul, add_zero]
+  rw [← h]
+  exact ⟨_, _, _, rfl⟩
 
 /-- `ExampleCircuit` as a `CompressibleCircuit`. -/
 def exampleCompressible (a b c sum : F) : CompressibleCircuit F where
@@ -60,12 +61,18 @@ theorem exampleCircuit_complete (a b c : F) (off : Offsets) (a₀ : Assignment F
   simp only [FpVar.run_newWitness, Offsets.advance_witness, Offsets.advance_nil, extend_witness,
     extend_nil]
   refine Complete.bind (FpVar.enforceEqual_complete _ _ _ _ ?_ ?_ ?_) ?_
-  · simp [FpVar.add, FpVar.below, LC.below, Variable.below]
-  · simp [FpVar.below, LC.below, Variable.below]
+  · simp only [FpVar.add, FpVar.below_lin, LC.below_append, LC.below_cons, LC.below_nil,
+      Variable.below, and_true]
+    omega
+  · simp only [FpVar.below_lin, LC.below_cons, LC.below_nil, Variable.below, and_true]
+    omega
   · simp (disch := omega) [FpVar.add, Assignment.setWitness, Function.update_of_ne,
-      Function.update_self]
+      Function.update_self, add_assoc]
   refine Complete.pure ?_ ?_
-  · simp [FpVar.below, LC.below, Variable.below]
+  · simp only [FpVar.run_enforceEqual, Offsets.advance_constrain, Offsets.advance_nil,
+      Eval.below_list, List.forall_mem_cons, FpVar.Eval_below, FpVar.below_lin, LC.below_cons,
+      LC.below_nil, Variable.below, and_true, List.not_mem_nil, false_implies, implies_true]
+    omega
   · simp (disch := omega) [Consistent, Assignment.setWitness, Function.update_of_ne,
       Function.update_self]
 
@@ -122,8 +129,9 @@ def exampleTraceString : String :=
 
 #eval IO.println exampleTraceString
 
-/-- The checked-in trace must match the model (regenerate it with
-`lake env lean --run HybridCompression/Examples.lean` if the model changes). -/
+-- The checked-in trace must match the model: if the model changes, update
+-- `traces/example.trace` from the `#eval` output above and re-run the Rust
+-- test `crates/tests/r1cs_trace.rs`.
 #eval show IO Unit from do
   let expected ← IO.FS.readFile "traces/example.trace"
   if expected != exampleTraceString then
