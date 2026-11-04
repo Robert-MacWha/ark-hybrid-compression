@@ -44,3 +44,8 @@ required-features = ["alloy", "test-utils"]
 name = "verifier"
 path = "tests/verifier.rs"
 required-features = ["alloy", "test-utils"]
+
+[[test]]
+name = "r1cs_trace"
+path = "tests/r1cs_trace.rs"
+required-features = ["test-utils"]

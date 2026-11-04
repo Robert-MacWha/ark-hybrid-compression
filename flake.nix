@@ -48,6 +48,8 @@
               pkgs.cargo-edit
               pkgs.git-cliff
               pkgs.just
+
+              pkgs.elan
             ];
           };
 
