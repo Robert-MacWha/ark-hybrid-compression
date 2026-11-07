@@ -2,55 +2,43 @@ use ark_crypto_primitives::crh::poseidon::{CRH, constraints::CRHGadget};
 use ark_ed_on_bn254::Fr;
 use ark_ff::UniformRand;
 use ark_hybrid_compression::{
-    KeccakCRH,
-    circuit::{Compressed, CompressedCircuit},
-    hybrid_compression,
-    test_utils::{ExampleCircuit, ExampleStatement, poseidon_params},
+    KeccakCRH, hybrid_compression,
+    test_utils::{ExampleCircuit, poseidon_params},
 };
 
-fn compressed() -> Compressed<Fr, ExampleStatement<Fr>> {
+type TestCircuit = ExampleCircuit<Fr, KeccakCRH<Fr>, CRH<Fr>, CRHGadget<Fr>>;
+
+fn circuit() -> TestCircuit {
     let mut rng = ark_std::test_rng();
     let a = Fr::rand(&mut rng);
     let b = Fr::rand(&mut rng);
     let c = Fr::rand(&mut rng);
-
-    let circuit = CompressedCircuit::<Fr, _, _, CRH<Fr>, CRHGadget<Fr>>::new_keccak(
-        poseidon_params(),
-        ExampleCircuit {
-            a,
-            b,
-            c,
-            sum: a + b + c,
-        },
-    );
-    circuit.compress().unwrap()
+    ExampleCircuit::new(a, b, c, a + b + c, (), poseidon_params())
 }
 
 #[test]
 fn verifier_matches_prover() {
-    let compressed = compressed();
+    let circuit = circuit();
+    let (alpha, beta, gamma) = circuit.public_inputs().unwrap();
 
-    let (alpha, gamma) = hybrid_compression::verifier::<KeccakCRH<Fr>, Fr>(
-        &(),
-        compressed.beta,
-        &compressed.statement_raw,
-    )
-    .unwrap();
+    let (alpha_v, gamma_v) =
+        hybrid_compression::verifier::<KeccakCRH<Fr>, Fr>(&(), beta, &circuit.statement()).unwrap();
 
-    assert_eq!(alpha, compressed.alpha);
-    assert_eq!(gamma, compressed.gamma);
+    assert_eq!(alpha_v, alpha);
+    assert_eq!(gamma_v, gamma);
 }
 
 #[test]
 fn verifier_rejects_tampered_statement() {
-    let compressed = compressed();
+    let circuit = circuit();
+    let (alpha, beta, gamma) = circuit.public_inputs().unwrap();
 
-    let mut tampered = compressed.statement_raw.clone();
+    let mut tampered = circuit.statement();
     tampered[0] += Fr::from(1u64);
 
-    let (alpha, gamma) =
-        hybrid_compression::verifier::<KeccakCRH<Fr>, Fr>(&(), compressed.beta, &tampered).unwrap();
+    let (alpha_v, gamma_v) =
+        hybrid_compression::verifier::<KeccakCRH<Fr>, Fr>(&(), beta, &tampered).unwrap();
 
-    assert_ne!(alpha, compressed.alpha);
-    assert_ne!(gamma, compressed.gamma);
+    assert_ne!(alpha_v, alpha);
+    assert_ne!(gamma_v, gamma);
 }

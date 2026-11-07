@@ -4,5 +4,5 @@
 pub mod circuit;
 pub mod poseidon;
 
-pub use circuit::{ExampleCircuit, ExampleStatement};
+pub use circuit::ExampleCircuit;
 pub use poseidon::poseidon_params;

@@ -12,7 +12,7 @@ use std::{borrow::Borrow, collections::BTreeMap, fmt::Write};
 
 use ark_crypto_primitives::crh::{CRHScheme, constraints::CRHSchemeGadget};
 use ark_ff::{Fp64, MontBackend, MontConfig, PrimeField, Zero};
-use ark_hybrid_compression::{circuit::CompressedCircuit, test_utils::ExampleCircuit};
+use ark_hybrid_compression::test_utils::ExampleCircuit;
 use ark_r1cs_std::fields::{FieldVar, fp::FpVar};
 use ark_relations::gr1cs::{
     ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, OptimizationGoal,
@@ -126,13 +126,14 @@ fn render_trace(cs: &ConstraintSystemRef<F17>) -> String {
 
 #[test]
 fn trace_matches_lean_model() {
-    let inner = ExampleCircuit::<F17> {
-        a: F17::from(1u64),
-        b: F17::from(2u64),
-        c: F17::from(3u64),
-        sum: F17::from(6u64),
-    };
-    let circuit = CompressedCircuit::<F17, _, SumCRH, SumCRH, SumCRHGadget>::new((), (), inner);
+    let circuit = ExampleCircuit::<F17, SumCRH, SumCRH, SumCRHGadget>::new(
+        F17::from(1u64),
+        F17::from(2u64),
+        F17::from(3u64),
+        F17::from(6u64),
+        (),
+        (),
+    );
 
     let cs = ConstraintSystem::<F17>::new_ref();
     cs.set_optimization_goal(OptimizationGoal::Constraints);

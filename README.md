@@ -10,7 +10,9 @@ See [khovratovich/two-worlds-ref](https://github.com/khovratovich/two-worlds-ref
 
 ### Compressing an arkworks circuit
 
-Arkworks circuits can be compressed by implementing the `CompressibleCircuit` trait.
+A circuit witnesses its statement as usual, then calls `enforce_compression`
+once. That allocates `(alpha, beta, gamma)` as the circuit's only public inputs
+and enforces the hybrid compression of the statement.
 
 ```rust
 use ark_crypto_primitives::{
@@ -19,7 +21,10 @@ use ark_crypto_primitives::{
 };
 use ark_ed_on_bn254::Fr;
 use ark_ff::PrimeField;
-use ark_hybrid_compression::circuit::{CompressedCircuit, CompressibleCircuit, Flatten};
+use ark_hybrid_compression::{
+    KeccakCRH,
+    circuit::{compress, enforce_compression},
+};
 use ark_r1cs_std::{
     alloc::AllocVar,
     eq::EqGadget,
@@ -30,15 +35,11 @@ use ark_relations::gr1cs::{
 };
 
 /// Toy circuit that claims `total` is the sum of eight values.
-struct SumCircuit { values: [Fr; 8], total: Fr }
-struct SumStatement { values: Vec<FpVar<Fr>>, total: FpVar<Fr> }
+struct SumCircuit { values: [Fr; 8], total: Fr, beta_params: PoseidonConfig<Fr> }
 
-impl CompressibleCircuit<Fr> for SumCircuit {
-    type Statement = SumStatement;
-
-    fn verify(&self, cs: &ConstraintSystemRef<Fr>) -> Result<SumStatement, SynthesisError> {
-        // Inner circuit's constraints against the statement. Any public values 
-        // must be allocated as `FpVar`s, then returned in the `Statement` struct.
+impl ConstraintSynthesizer<Fr> for SumCircuit {
+    fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
+        // Witness the statement and enforce the circuit's own relation.
         let values: Vec<FpVar<Fr>> = self
             .values
             .iter()
@@ -51,41 +52,43 @@ impl CompressibleCircuit<Fr> for SumCircuit {
             .fold(FpVar::zero(), |acc, v| acc + v)
             .enforce_equal(&total)?;
 
-        Ok(SumStatement { values, total })
-    }
-}
-
-impl Flatten<Fr> for SumStatement {
-    fn flatten(&self) -> Result<Vec<FpVar<Fr>>, SynthesisError> {
-        let mut stmt = self.values.clone();
-        stmt.push(self.total.clone());
-        Ok(stmt)
+        // Compress the statement `[values.., total]` into the public inputs
+        // `(alpha, beta, gamma)`, using keccak256 for `alpha` (matching the
+        // Solidity verifier) and Poseidon for `beta`.
+        let mut stmt = values;
+        stmt.push(total);
+        enforce_compression::<Fr, KeccakCRH<Fr>, CRH<Fr>, CRHGadget<Fr>>(
+            cs,
+            &(),
+            &self.beta_params,
+            &stmt,
+        )?;
+        Ok(())
     }
 }
 
 // Arbitrary values for the circuit statement.
 let values: [Fr; 8] = core::array::from_fn(|i| Fr::from(i as u64));
-let inner = SumCircuit { values, total: Fr::from(28u64) };
+let total = Fr::from(28u64);
 
 // Poseidon parameters for the beta CRH.
 let (ark, mds) = find_poseidon_ark_and_mds::<Fr>(Fr::MODULUS_BIT_SIZE as u64, 2, 8, 24, 0);
 let beta_params = PoseidonConfig::new(8, 24, 31, mds, ark, 2, 1);
 
-// Wrap the inner circuit in a `CompressedCircuit` that implements the hybrid 
-// compression algorithm.
-let circuit =
-    CompressedCircuit::<Fr, _, _, CRH<Fr>, CRHGadget<Fr>>::new_keccak(beta_params, inner);
-let compressed = circuit.compress().unwrap();
+// The prover computes the public inputs natively from the statement...
+let mut stmt = values.to_vec();
+stmt.push(total);
+let (alpha, beta, gamma) =
+    compress::<Fr, KeccakCRH<Fr>, CRH<Fr>>(&(), &beta_params, &stmt).unwrap();
 
+// ...and they are exactly what the circuit exposes: the 9 statement elements
+// are compressed down to 3 public inputs.
 let cs = ConstraintSystem::<Fr>::new_ref();
-circuit.generate_constraints(cs.clone()).unwrap();
+SumCircuit { values, total, beta_params }.generate_constraints(cs.clone()).unwrap();
 assert!(cs.is_satisfied().unwrap());
-
-// The 9 statement elements are compressed down to 3 public inputs.
-assert_eq!(compressed.statement_raw.len(), 9);
 assert_eq!(
     cs.instance_assignment().unwrap(),
-    vec![Fr::from(1u64), compressed.alpha, compressed.beta, compressed.gamma],
+    vec![Fr::from(1u64), alpha, beta, gamma],
 );
 ```
 

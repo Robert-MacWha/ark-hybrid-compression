@@ -2,7 +2,7 @@
 # Binding: in-circuit and out-of-circuit statements agree
 
 The verifier holds `(β, s')`, computes `(α, γ) = verifier Hα β s'`, and checks
-a proof against the public inputs `(α, β, γ)`. By `compressedCircuit_sound`
+a proof against the public inputs `(α, β, γ)`. By `enforceCompression_sound`
 the circuit forces `β = H(s)` and `γ = uhf (α + β) s` for the *in-circuit*
 statement `s`. Hence `uhf σ s = uhf σ s'` with `σ = α + β`.
 
@@ -108,30 +108,30 @@ theorem uhf_collision_shift_card_le [Fintype F] [DecidableEq F] {s s' : List F}
     exact add_right_cancel hxy
 
 /-- **Binding.** If the verifier accepts `(β, s')`, i.e. some assignment
-satisfies the compressed circuit with public inputs `(Hα s', β, uhf (β + Hα s') s')`,
+satisfies `enforce_compression` with public inputs `(Hα s', β, uhf (β + Hα s') s')`,
 then the in-circuit statement `s` either equals `s'` or `σ = Hα s' + β` is a
 root of the difference polynomial (one of at most `n - 1` values). -/
-theorem binding [DecidableEq F] (H : CRHSchemeGadget F) (Hα : List F → F) (inner : CompressibleCircuit F)
-    (k : Counters) (a : Assignment F) (β : F) (s' : List F)
-    (hacc : ConstraintsHold a ((compressedCircuit H Hα inner.verify).run k).2)
-    (hpub : (a.instance_assignment (alphaIndex inner.verify k),
-      a.instance_assignment (alphaIndex inner.verify k + 1),
-      a.instance_assignment (alphaIndex inner.verify k + 2)) =
+theorem binding [DecidableEq F] (H : CRHSchemeGadget F) (Hα : List F → F)
+    (stmt : List (FpVar F)) (k : Counters) (a : Assignment F) (β : F) (s' : List F)
+    (hacc : ConstraintsHold a ((enforceCompression H Hα stmt).run k).2)
+    (hpub : (a.instance_assignment k.num_instance_variables,
+      a.instance_assignment (k.num_instance_variables + 1),
+      a.instance_assignment (k.num_instance_variables + 2)) =
       ((verifierNative Hα β s').1, β, (verifierNative Hα β s').2))
-    (hlen : s'.length = (statementOf inner.verify k a).length) :
-    statementOf inner.verify k a = s' ∨
-      Hα s' + β ∈ (uhfPoly (statementOf inner.verify k a) - uhfPoly s').roots := by
-  obtain ⟨_, hsound⟩ := compressedCircuit_sound H Hα inner k a hacc
+    (hlen : s'.length = (stmt.map (·.eval a)).length) :
+    stmt.map (·.eval a) = s' ∨
+      Hα s' + β ∈ (uhfPoly (stmt.map (·.eval a)) - uhfPoly s').roots := by
+  have hsound := enforceCompression_sound H Hα stmt k a hacc
   simp only [verifierNative, hybridCompression, Prod.mk.injEq] at hpub
   obtain ⟨hα, hβ, hγ⟩ := hpub
   simp only [proverNative, hybridCompression, Prod.mk.injEq] at hsound
   obtain ⟨hβ', hγ'⟩ := hsound
-  by_cases hs : statementOf inner.verify k a = s'
+  by_cases hs : stmt.map (·.eval a) = s'
   · exact Or.inl hs
   · right
     apply uhf_collision_mem_roots hlen hs
-    have hσ : Hα s' + β = a.instance_assignment (alphaIndex inner.verify k) +
-        H.evaluate_native (statementOf inner.verify k a) := by
+    have hσ : Hα s' + β = a.instance_assignment k.num_instance_variables +
+        H.evaluate_native (stmt.map (·.eval a)) := by
       rw [hα, ← hβ', hβ]
     rw [hσ, ← hγ', hγ, ← hσ, add_comm]
 

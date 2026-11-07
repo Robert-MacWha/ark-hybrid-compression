@@ -8,7 +8,7 @@ use ark_crypto_primitives::crh::poseidon::{CRH, constraints::CRHGadget};
 use ark_ed_on_bn254::Fr;
 use ark_ff::PrimeField;
 use ark_hybrid_compression::{
-    circuit::CompressedCircuit,
+    KeccakCRH,
     test_utils::{ExampleCircuit, poseidon_params},
 };
 use ark_relations::gr1cs::{ConstraintSynthesizer, ConstraintSystem};
@@ -34,31 +34,30 @@ async fn circuit_matches_solidity() {
         .await
         .unwrap();
 
-    let poseidon_params = poseidon_params();
     let [a, b, c] = from_fn(|i| Fr::from(i as u64));
-    let inner = ExampleCircuit {
+    let circuit = ExampleCircuit::<Fr, KeccakCRH<Fr>, CRH<Fr>, CRHGadget<Fr>>::new(
         a,
         b,
         c,
-        sum: a + b + c,
-    };
-    let circuit =
-        CompressedCircuit::<Fr, _, _, CRH<Fr>, CRHGadget<Fr>>::new_keccak(poseidon_params, inner);
-    let compressed = circuit.compress().unwrap();
+        a + b + c,
+        (),
+        poseidon_params(),
+    );
+    let (alpha, beta, gamma) = circuit.public_inputs().unwrap();
 
     // Runs the off-circuit computation, then checks that the circuit is satisfied.
     let cs = ConstraintSystem::<Fr>::new_ref();
     circuit.generate_constraints(cs.clone()).unwrap();
     assert!(cs.is_satisfied().unwrap());
+    assert_eq!(
+        cs.instance_assignment().unwrap(),
+        vec![Fr::from(1u64), alpha, beta, gamma]
+    );
 
     // Authorize the proof if the on-chain computed alpha/beta/gamma match the
     // off-chain values.
     mock_arg_ver
-        .authorize(vec![
-            compressed.alpha.into(),
-            compressed.beta.into(),
-            compressed.gamma.into(),
-        ])
+        .authorize(vec![alpha.into(), beta.into(), gamma.into()])
         .send()
         .await
         .unwrap()
@@ -72,7 +71,7 @@ async fn circuit_matches_solidity() {
             b.into(),
             c.into(),
             (a + b + c).into(),
-            compressed.beta.into(),
+            beta.into(),
             vec![].into(),
         )
         .call()

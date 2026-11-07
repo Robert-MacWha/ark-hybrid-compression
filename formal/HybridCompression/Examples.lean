@@ -2,7 +2,7 @@
 # Example instantiations (`src/test_utils`)
 
 * `exampleCircuit` mirrors `ExampleCircuit`: witnesses `a, b, c, sum`,
-  enforces `a + b + c = sum`, and returns `[a, b, c, sum]` as the statement.
+  enforces `a + b + c = sum`, and compresses the statement `[a, b, c, sum]`.
 * `sumCRH` is a toy "hash" (the sum of the inputs) packaged as a
   `CRHSchemeGadget`, showing what a concrete hash gadget has to provide.
 * The trace of the compressed example circuit over `ZMod 17` is checked
@@ -19,36 +19,8 @@ open ArkR1CS
 
 variable {F : Type} [Field F] [DecidableEq F]
 
-/-- `ExampleCircuit::verify` followed by `ExampleStatement::flatten`. -/
-def exampleCircuit (a b c sum : F) : CS F (List (FpVar F)) := do
-  let av ← FpVar.new_witness a
-  let bv ← FpVar.new_witness b
-  let cv ← FpVar.new_witness c
-  let sv ← FpVar.new_witness sum
-  EqGadget.enforce_equal ((av.add bv).add cv) sv
-  pure [av, bv, cv, sv]
-
 /-- The relation `ExampleCircuit` enforces on its statement. -/
 def exampleRel (s : List F) : Prop := ∃ a b c : F, s = [a, b, c, a + b + c]
-
-theorem exampleCircuit_sound (a b c sum : F) (k : Counters) (x : Assignment F)
-    (h : ConstraintsHold x ((exampleCircuit a b c sum).run k).2) :
-    exampleRel (((exampleCircuit a b c sum).run k).1.map (·.eval x)) := by
-  simp only [exampleCircuit, CS.run_bind, CS.run_pure, FpVar.run_new_witness, List.append_nil,
-    List.singleton_append, constraintsHold_witness] at h
-  have h := FpVar.enforce_equal_sound _ _ (fun hc => by simpa [FpVar.isConstant] using hc.2) _ x h
-  simp only [exampleCircuit, CS.run_bind, CS.run_pure, FpVar.run_new_witness, List.map_cons,
-    List.map_nil, exampleRel]
-  simp only [FpVar.eval_add, FpVar.eval_Var, AllocatedFp.eval_new, LinearCombination.eval_ofVar,
-    Variable.eval_Witness] at h ⊢
-  rw [← h]
-  exact ⟨_, _, _, rfl⟩
-
-/-- `ExampleCircuit` as a `CompressibleCircuit`. -/
-def exampleCompressible (a b c sum : F) : CompressibleCircuit F where
-  verify := exampleCircuit a b c sum
-  rel := exampleRel
-  sound := exampleCircuit_sound a b c sum
 
 /-- A toy hash gadget: the sum of the inputs, `x₀ + (x₁ + (… + 0))`. It emits
 no constraints. -/
@@ -76,9 +48,44 @@ def sumCRH : CRHSchemeGadget F where
   sound xs k a _ := sumGadget_sound xs k a
   noInputs xs k := by simp [sumGadget_ops, Op.inputCount]
 
-/-- Operations of the compressed example circuit from a fresh constraint system. -/
+/-- `ExampleCircuit::generate_constraints`: witness `a, b, c, sum`, enforce
+`a + b + c = sum`, then compress the statement `[a, b, c, sum]`. -/
+def exampleCircuit (H : CRHSchemeGadget F) (Hα : List F → F) (a b c sum : F) : CS F Unit := do
+  let av ← FpVar.new_witness a
+  let bv ← FpVar.new_witness b
+  let cv ← FpVar.new_witness c
+  let sv ← FpVar.new_witness sum
+  EqGadget.enforce_equal ((av.add bv).add cv) sv
+  enforceCompression H Hα [av, bv, cv, sv]
+
+/-- Soundness of the whole example circuit, composing the circuit's own
+relation with `enforceCompression_sound`: the public inputs `(α, β, γ)`
+commit to a statement `[a', b', c', a' + b' + c']`. -/
+theorem exampleCircuit_sound (H : CRHSchemeGadget F) (Hα : List F → F) (a b c sum : F)
+    (k : Counters) (x : Assignment F)
+    (h : ConstraintsHold x ((exampleCircuit H Hα a b c sum).run k).2) :
+    ∃ a' b' c' : F,
+      (x.instance_assignment (k.num_instance_variables + 1),
+        x.instance_assignment (k.num_instance_variables + 2)) =
+        proverNative H.evaluate_native (x.instance_assignment k.num_instance_variables)
+          [a', b', c', a' + b' + c'] := by
+  simp only [exampleCircuit, CS.run_bind, FpVar.run_new_witness, List.singleton_append,
+    constraintsHold_append, constraintsHold_witness] at h
+  obtain ⟨heq, hc⟩ := h
+  have heq := FpVar.enforce_equal_sound _ _ (fun hc => by simpa [FpVar.isConstant] using hc.2)
+    _ x heq
+  have hc := enforceCompression_sound _ _ _ _ x hc
+  simp only [FpVar.eval_add, FpVar.eval_Var, AllocatedFp.eval_new, LinearCombination.eval_ofVar,
+    Variable.eval_Witness, Counters.advance_num_instance_variables,
+    Counters.advance_num_witness_variables, Op.inputCount, Op.witnessCount,
+    FpVar.enforce_equal_inputCount, Nat.add_zero, Nat.zero_add, List.map_cons,
+    List.map_nil] at heq hc
+  rw [← heq] at hc
+  exact ⟨_, _, _, hc⟩
+
+/-- Operations of the example circuit from a fresh constraint system. -/
 def exampleTrace (a b c sum : F) (Hα : List F → F) : List (Op F) :=
-  ((compressedCircuit sumCRH Hα (exampleCircuit a b c sum)).run Counters.new).2
+  ((exampleCircuit sumCRH Hα a b c sum).run Counters.new).2
 
 instance : Fact (Nat.Prime 17) := ⟨by norm_num⟩
 

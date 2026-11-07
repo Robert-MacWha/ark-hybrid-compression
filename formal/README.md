@@ -20,7 +20,7 @@ formal/
 ├── HybridCompression/             the crate, module for module
 │   ├── Uhf.lean                   src/uhf
 │   ├── HybridCompression.lean     src/hybrid_compression
-│   ├── Circuit.lean               src/circuit.rs (CompressedCircuit)
+│   ├── Circuit.lean               src/circuit.rs (enforce_compression)
 │   ├── Security.lean              binding theorem, (n-1)/|F| collision bound
 │   └── Examples.lean              src/test_utils, trace and is_satisfied checks
 └── traces/example.trace           shared with crates/tests/r1cs_trace.rs
@@ -71,14 +71,15 @@ still pins the bit to the indicator).
 
 ## Main results
 
-With `H` any `CRHSchemeGadget`, `Hα` any native function, `inner` any
-`CompressibleCircuit`, and `s` the in-circuit statement (the inner circuit's
-output evaluated under the assignment):
+With `H` any `CRHSchemeGadget`, `Hα` any native function, `stmt` any list of
+statement variables (produced by an arbitrary circuit), and `s` the in-circuit
+statement (`stmt` evaluated under the assignment):
 
-* `compressedCircuit_sound` (`HybridCompression/Circuit.lean`): every
-  assignment satisfying `CompressedCircuit::generate_constraints` has public
-  inputs `(α, β, γ)` with `inner.rel s` and `(β, γ) = prover H α s`, i.e.
-  `β = H(s)` and `γ = uhf (α + β) s`.
+* `enforceCompression_sound` (`HybridCompression/Circuit.lean`): every
+  assignment satisfying `enforce_compression` has public inputs `(α, β, γ)`
+  with `(β, γ) = prover H α s`, i.e. `β = H(s)` and `γ = uhf (α + β) s`. The
+  circuit that produced `stmt` contributes its own relation on `s`;
+  `exampleCircuit_sound` shows the two composing.
 * `binding` (`HybridCompression/Security.lean`): if the verifier accepts
   `(β, s')`, i.e. the circuit is satisfied with the public inputs
   `verifier Hα β s'`, then either `s = s'` or `Hα s' + β` is a root of the
