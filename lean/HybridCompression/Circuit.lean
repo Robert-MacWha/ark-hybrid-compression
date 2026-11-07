@@ -11,8 +11,7 @@ Main theorem `compressStatement_sound`: for *any* satisfying assignment, with
 `num_instance_variables`, `(β, γ) = prover H α s` where `s` is the evaluation
 of `stmt`, i.e. `β = H(s)` and `γ = uhf (α + β) s`. The circuit that produced
 `stmt` is arbitrary: its own relation on `s` is its own theorem, and the two
-compose by `constraintsHold_append` (see `exampleCircuit_sound` in
-`Examples.lean`).
+compose by `constraintsHold_append`.
 -/
 import HybridCompression.HybridCompression
 

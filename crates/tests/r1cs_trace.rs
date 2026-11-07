@@ -1,8 +1,9 @@
-//! Differential test of the Lean model in `formal/` against arkworks.
+//! Differential test of the Lean model in `lean/` against arkworks.
 //!
-//! `lean/Traces.lean` renders the constraint system of `exampleCircuit` over
-//! `𝔽₁₇`, with a toy "sum" hash for both `alpha` and `beta`, into
-//! `target/traces`. This test builds the same circuit with arkworks, renders
+//! `lean/Traces.lean` renders the constraint system of `exampleTrace` (witness
+//! a statement, then compress it) over `𝔽₁₇`, with a toy "sum" hash for both
+//! `alpha` and `beta`, into `target/traces`. This test builds the same circuit
+//! with arkworks, renders
 //! its matrices and honest assignment the same way, and checks they match. Any
 //! divergence between the model's `FpVar` semantics and `ark-r1cs-std` shows up
 //! here as a different trace. Needs the traces rendered first, so it is ignored
@@ -14,7 +15,6 @@ use ark_crypto_primitives::crh::{CRHScheme, constraints::CRHSchemeGadget};
 use ark_hybrid_compression::hybrid_compression::{self, compress};
 use ark_r1cs_std::{
     alloc::AllocVar,
-    eq::EqGadget,
     fields::{FieldVar, fp::FpVar},
 };
 use ark_r1cs_trace::{F17, read_traces, render_trace};
@@ -60,27 +60,22 @@ impl CRHSchemeGadget<SumCRH, F17> for SumCRHGadget {
     }
 }
 
-/// Mirrors `exampleCircuit` in the Lean model: witnesses `a, b, c, sum`,
-/// enforces `a + b + c = sum`, and compresses the statement `[a, b, c, sum]`
-/// with the toy hash for both `alpha` and `beta`.
-struct SumCircuit {
-    a: F17,
-    b: F17,
-    c: F17,
-    sum: F17,
+/// Mirrors `exampleTrace` in the Lean model: witnesses each value of the
+/// statement and compresses it with the toy hash for both `alpha` and `beta`.
+struct CompressCircuit {
+    statement: Vec<F17>,
 }
 
-impl ConstraintSynthesizer<F17> for SumCircuit {
+impl ConstraintSynthesizer<F17> for CompressCircuit {
     fn generate_constraints(self, cs: ConstraintSystemRef<F17>) -> Result<(), SynthesisError> {
-        let a = FpVar::new_witness(cs.clone(), || Ok(self.a))?;
-        let b = FpVar::new_witness(cs.clone(), || Ok(self.b))?;
-        let c = FpVar::new_witness(cs.clone(), || Ok(self.c))?;
-        let sum = FpVar::new_witness(cs.clone(), || Ok(self.sum))?;
-        (&a + &b + &c).enforce_equal(&sum)?;
+        let statement = self
+            .statement
+            .iter()
+            .map(|v| FpVar::new_witness(cs.clone(), || Ok(*v)))
+            .collect::<Result<Vec<_>, _>>()?;
 
-        let public_inputs =
-            compress::<SumCRH, SumCRH, F17>(&(), &(), &[self.a, self.b, self.c, self.sum])
-                .map_err(|_| SynthesisError::Unsatisfiable)?;
+        let public_inputs = compress::<SumCRH, SumCRH, F17>(&(), &(), &self.statement)
+            .map_err(|_| SynthesisError::Unsatisfiable)?;
         let alpha = FpVar::new_input(cs.clone(), || Ok(public_inputs.0))?;
         let beta = FpVar::new_input(cs.clone(), || Ok(public_inputs.1))?;
         let gamma = FpVar::new_input(cs, || Ok(public_inputs.2))?;
@@ -89,7 +84,7 @@ impl ConstraintSynthesizer<F17> for SumCircuit {
             &alpha,
             &beta,
             &gamma,
-            &[a, b, c, sum],
+            &statement,
         )
     }
 }
@@ -100,11 +95,8 @@ fn trace_matches_lean_model() {
     let expected = read_traces(concat!(env!("CARGO_MANIFEST_DIR"), "/target/traces"))
         .expect("traces written by `lake env lean --run Traces.lean` (see `just verify`)");
 
-    let circuit = SumCircuit {
-        a: F17::from(1u64),
-        b: F17::from(2u64),
-        c: F17::from(3u64),
-        sum: F17::from(6u64),
+    let circuit = CompressCircuit {
+        statement: [1u64, 2, 3, 6].map(F17::from).to_vec(),
     };
     let cs = ConstraintSystem::<F17>::new_ref();
     cs.set_optimization_goal(OptimizationGoal::Constraints);
