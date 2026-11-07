@@ -41,5 +41,10 @@ jobs:
     - uses: actions/checkout@v4
     - uses: leanprover/lean-action@v1
       with:
-        lake-package-directory: formal
+        lake-package-directory: lean
         use-mathlib-cache: true
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: "crates"
+    - run: cd crates && cargo test --features test-utils --test r1cs_trace -- --ignored

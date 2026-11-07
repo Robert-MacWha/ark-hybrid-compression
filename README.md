@@ -127,4 +127,4 @@ end-to-end against the Rust prover by `crates/tests/circuit_integration.rs`.
 `formal/` contains a Lean 4 model of the circuit with machine-checked proofs
 that, for any black-box hash gadget and any inner circuit, the public inputs
 `(alpha, beta, gamma)` bind the in-circuit statement to the one the verifier
-recomputes. See [`formal/README.md`](formal/README.md).
+recomputes. See [`lean/README.md`](lean/README.md).

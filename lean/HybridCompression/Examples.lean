@@ -5,9 +5,9 @@
   enforces `a + b + c = sum`, and compresses the statement `[a, b, c, sum]`.
 * `sumCRH` is a toy "hash" (the sum of the inputs) packaged as a
   `CRHSchemeGadget`, showing what a concrete hash gadget has to provide.
-* The trace of the compressed example circuit over `ZMod 17` is checked
-  against `traces/example.trace`, which `crates/tests/r1cs_trace.rs` also
-  checks against the arkworks constraint system.
+* `exampleTraceString` is the trace of the example circuit over `ZMod 17`;
+  `Traces.lean` writes it for `crates/tests/r1cs_trace.rs`, which checks it
+  against the arkworks constraint system.
 -/
 import HybridCompression.Circuit
 import Mathlib.Algebra.Field.ZMod
@@ -83,23 +83,14 @@ instance : Fact (Nat.Prime 17) := ⟨by norm_num⟩
 
 /-- The canonical trace over `𝔽₁₇` with statement `[1, 2, 3, 6]` and both hashes
 equal to the sum of the inputs. `crates/tests/r1cs_trace.rs` builds the same
-circuit with arkworks and checks it against `traces/example.trace`. -/
+circuit with arkworks and checks it against this. -/
 def exampleTraceString : String :=
   renderTrace (fun x : ZMod 17 => toString x.val) (exampleTrace (F := ZMod 17) 1 2 3 6 List.sum)
-
-#eval IO.println exampleTraceString
 
 -- The honest prover's assignment satisfies the circuit (`cs.is_satisfied()`).
 #eval show IO Unit from do
   unless isSatisfied (exampleTrace (F := ZMod 17) 1 2 3 6 List.sum) do
     throw (IO.userError "example circuit is not satisfied by the honest assignment")
 
--- The checked-in trace must match the model: if the model changes, update
--- `traces/example.trace` from the `#eval` output above and re-run the Rust
--- test `crates/tests/r1cs_trace.rs`.
-#eval show IO Unit from do
-  let expected ← IO.FS.readFile "traces/example.trace"
-  if expected != exampleTraceString then
-    throw (IO.userError s!"traces/example.trace is out of date; expected:\n{exampleTraceString}")
 
 end HybridCompression
