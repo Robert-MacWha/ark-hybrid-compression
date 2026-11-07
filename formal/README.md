@@ -2,7 +2,7 @@
 
 Lean 4 / Mathlib proofs that the hybrid compression binds the in-circuit statement to the values the verifier recomputes out of circuit, for **any** black-box hash gadget and **any** inner circuit. Only *soundness* is proved (no satisfying assignment can exist with mismatched values); completeness (the honest prover can always produce one) is covered by the crate's tests.
 
-The `ark-r1cs/` package is the reusable model of `ark-relations` / `ark-r1cs-std`, laid out module for module after the crates; `HybridCompression/` mirrors this crate's modules (`Uhf`, `HybridCompression`, `Circuit`, plus `Security` for the binding theorem and `Examples` for the trace checks).
+The `ark-r1cs/` package is the reusable model of `ark-relations` / `ark-r1cs-std`, laid out module for module after the crates; `HybridCompression/` mirrors this crate's modules (`Uhf`, `HybridCompression`), plus `Circuit` for the compression pattern of the README, `Security` for the binding theorem and `Examples` for the trace checks.
 
 `ark-r1cs/` is a self-contained Lake package (required by path) so it can move to its own repository and be shared across circuit verifications.
 
@@ -30,7 +30,7 @@ Every constraint-emitting operation has a soundness lemma stated for an *arbitra
 
 With `H` any `CRHSchemeGadget`, `Hα` any native function, `stmt` any list of statement variables (produced by an arbitrary circuit), and `s` the in-circuit statement (`stmt` evaluated under the assignment):
 
-* `enforceCompression_sound` (`HybridCompression/Circuit.lean`): every assignment satisfying `enforce_compression` has public inputs `(α, β, γ)` with `(β, γ) = prover H α s`, i.e. `β = H(s)` and `γ = uhf (α + β) s`. The circuit that produced `stmt` contributes its own relation on `s`; `exampleCircuit_sound` shows the two composing.
+* `compressStatement_sound` (`HybridCompression/Circuit.lean`): every assignment satisfying the README's compression pattern (allocate `α`, run the prover gadget, expose `β` and `γ`) has public inputs `(α, β, γ)` with `(β, γ) = prover H α s`, i.e. `β = H(s)` and `γ = uhf (α + β) s`. The circuit that produced `stmt` contributes its own relation on `s`; `exampleCircuit_sound` shows the two composing.
 * `binding` (`HybridCompression/Security.lean`): if the verifier accepts `(β, s')`, i.e. the circuit is satisfied with the public inputs `verifier Hα β s'`, then either `s = s'` or `Hα s' + β` is a root of the non-zero polynomial `uhfPoly s - uhfPoly s'`.
 * `uhf_collision_shift_card_le`: for fixed `s ≠ s'` of length `n` and fixed `t`, at most `n - 1` values `x ∈ F` satisfy `uhf (x + t) s = uhf (x + t) s'`. With `t = β` this bounds the bad values of `α = Hα(s')`; with `t = α` the bad values of `β = Hβ(s)`.
 
@@ -45,7 +45,7 @@ Together: a proof for a statement `s' ≠ s` verifies only if the seed `α + β`
 The proofs are about the Lean model, not the Rust source. Two things keep the gap small:
 
 1. The model follows `ark-r1cs-std` method by method (above). Not modelled: setup mode (`value = None`), `OptimizationGoal::Weight` outlining in `finalize()`, and GR1CS predicates other than R1CS. None of these change which assignments satisfy the system.
-2. **Differential testing.** `ArkR1CS.renderTrace` renders the model's constraint matrices and prover assignment in the canonical form of `ConstraintSystem::to_matrices()`. `Examples.lean` checks the compressed `ExampleCircuit` over `𝔽₁₇` against `traces/example.trace` (and that the prover's assignment satisfies it), and `crates/tests/r1cs_trace.rs` builds the same circuit with arkworks and checks it against the same file. Any semantic drift between the model and `ark-r1cs-std` fails one of the two.
+2. **Differential testing.** `ArkR1CS.renderTrace` renders the model's constraint matrices and prover assignment in the canonical form of `ConstraintSystem::to_matrices()`. `Examples.lean` checks `exampleCircuit` over `𝔽₁₇` against `traces/example.trace` (and that the prover's assignment satisfies it), and `crates/tests/r1cs_trace.rs` builds the same circuit with arkworks and checks it against the same file. Any semantic drift between the model and `ark-r1cs-std` fails one of the two.
 
 ## Adding a verified gadget
 

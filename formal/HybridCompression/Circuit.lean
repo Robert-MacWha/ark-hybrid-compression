@@ -1,21 +1,21 @@
 /-
-# `enforce_compression` (`src/circuit.rs`)
+# Compressing a statement in a circuit (the pattern in the README)
 
-`enforceCompression H Hα stmt` is `circuit::enforce_compression`: given the
-statement variables `stmt` a circuit has already witnessed, it
+`compressStatement H Hα stmt` is what a circuit does to compress the statement
+variables `stmt` it has witnessed:
 
-1. computes `α = Hα(stmt values)` natively and allocates it as a public input;
-2. runs the hybrid-compression prover gadget, obtaining `(β, γ)`;
-3. allocates `β` and `γ` as public inputs and `enforce_equal`s them to the
-   gadget outputs (`exposeOutput`).
+1. compute `α = Hα(stmt values)` natively and allocate it as a public input;
+2. run the hybrid-compression prover gadget, obtaining `(β, γ)`;
+3. allocate `β` and `γ` as public inputs and `enforce_equal` them to the gadget
+   outputs (`exposeOutput`).
 
-Main theorem `enforceCompression_sound`: for *any* satisfying assignment,
-with `(α, β, γ)` the three public inputs allocated at the current
-`num_instance_variables`, `(β, γ) = prover H α s` where `s` is the
-evaluation of `stmt`, i.e. `β = H(s)` and `γ = uhf (α + β) s`. The circuit
-that produced `stmt` is arbitrary: its own relation on `s` is its own
-theorem, and the two compose by `constraintsHold_append` (see
-`exampleCircuit_sound` in `Examples.lean`).
+Main theorem `compressStatement_sound`: for *any* satisfying assignment, with
+`(α, β, γ)` the three public inputs allocated at the current
+`num_instance_variables`, `(β, γ) = prover H α s` where `s` is the evaluation
+of `stmt`, i.e. `β = H(s)` and `γ = uhf (α + β) s`. The circuit that produced
+`stmt` is arbitrary: its own relation on `s` is its own theorem, and the two
+compose by `constraintsHold_append` (see `exampleCircuit_sound` in
+`Examples.lean`).
 -/
 import HybridCompression.HybridCompression
 
@@ -44,8 +44,8 @@ theorem exposeOutput_inputCount (x : FpVar F) (k : Counters) :
   simp only [exposeOutput, CS.run_bind, FpVar.run_new_input, List.singleton_append, Op.inputCount,
     FpVar.enforce_equal_inputCount]
 
-/-- `circuit::enforce_compression`. -/
-def enforceCompression (H : CRHSchemeGadget F) (Hα : List F → F) (stmt : List (FpVar F)) :
+/-- The compression pattern: allocate `α`, run the prover gadget, expose `β` and `γ`. -/
+def compressStatement (H : CRHSchemeGadget F) (Hα : List F → F) (stmt : List (FpVar F)) :
     CS F Unit := do
   -- `alpha` is computed natively from the statement's assigned values.
   let alpha ← FpVar.new_input (Hα (stmt.map FpVar.value))
@@ -53,17 +53,17 @@ def enforceCompression (H : CRHSchemeGadget F) (Hα : List F → F) (stmt : List
   exposeOutput bg.1
   exposeOutput bg.2
 
-/-- **Soundness.** Any assignment satisfying `enforce_compression` has public
+/-- **Soundness.** Any assignment satisfying the compression pattern has public
 inputs `(α, β, γ)` with `(β, γ) = prover H α s`, where `s` is the in-circuit
 statement. -/
-theorem enforceCompression_sound (H : CRHSchemeGadget F) (Hα : List F → F)
+theorem compressStatement_sound (H : CRHSchemeGadget F) (Hα : List F → F)
     (stmt : List (FpVar F)) (k : Counters) (a : Assignment F)
-    (h : ConstraintsHold a ((enforceCompression H Hα stmt).run k).2) :
+    (h : ConstraintsHold a ((compressStatement H Hα stmt).run k).2) :
     (a.instance_assignment (k.num_instance_variables + 1),
       a.instance_assignment (k.num_instance_variables + 2)) =
       proverNative H.evaluate_native (a.instance_assignment k.num_instance_variables)
         (stmt.map (·.eval a)) := by
-  simp only [enforceCompression, CS.run_bind, FpVar.run_new_input, List.singleton_append,
+  simp only [compressStatement, CS.run_bind, FpVar.run_new_input, List.singleton_append,
     constraintsHold_append, constraintsHold_input] at h
   obtain ⟨h₂, h₃, h₄⟩ := h
   have hp := proverGadget_sound H _ _ _ a h₂
@@ -75,10 +75,10 @@ theorem enforceCompression_sound (H : CRHSchemeGadget F) (Hα : List F → F)
   rw [show k.num_instance_variables + 2 = k.num_instance_variables + 1 + 1 from rfl, hβ, hγ]
   exact hp
 
-theorem enforceCompression_inputCount (H : CRHSchemeGadget F) (Hα : List F → F)
+theorem compressStatement_inputCount (H : CRHSchemeGadget F) (Hα : List F → F)
     (stmt : List (FpVar F)) (k : Counters) :
-    Op.inputCount ((enforceCompression H Hα stmt).run k).2 = 3 := by
-  simp only [enforceCompression, CS.run_bind, FpVar.run_new_input, List.singleton_append,
+    Op.inputCount ((compressStatement H Hα stmt).run k).2 = 3 := by
+  simp only [compressStatement, CS.run_bind, FpVar.run_new_input, List.singleton_append,
     Op.inputCount, Op.inputCount_append, proverGadget_inputCount, exposeOutput_inputCount]
 
 end HybridCompression

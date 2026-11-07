@@ -1,7 +1,7 @@
 /-
 # Example instantiations (`src/test_utils`)
 
-* `exampleCircuit` mirrors `ExampleCircuit`: witnesses `a, b, c, sum`,
+* `exampleCircuit` mirrors `SumCircuit` in `crates/tests/r1cs_trace.rs`: witnesses `a, b, c, sum`,
   enforces `a + b + c = sum`, and compresses the statement `[a, b, c, sum]`.
 * `sumCRH` is a toy "hash" (the sum of the inputs) packaged as a
   `CRHSchemeGadget`, showing what a concrete hash gadget has to provide.
@@ -45,7 +45,7 @@ def sumCRH : CRHSchemeGadget F where
   sound xs k a _ := sumGadget_sound xs k a
   noInputs xs k := by simp [sumGadget_ops, Op.inputCount]
 
-/-- `ExampleCircuit::generate_constraints`: witness `a, b, c, sum`, enforce
+/-- `SumCircuit::generate_constraints`: witness `a, b, c, sum`, enforce
 `a + b + c = sum`, then compress the statement `[a, b, c, sum]`. -/
 def exampleCircuit (H : CRHSchemeGadget F) (Hα : List F → F) (a b c sum : F) : CS F Unit := do
   let av ← FpVar.new_witness a
@@ -53,10 +53,10 @@ def exampleCircuit (H : CRHSchemeGadget F) (Hα : List F → F) (a b c sum : F) 
   let cv ← FpVar.new_witness c
   let sv ← FpVar.new_witness sum
   EqGadget.enforce_equal ((av.add bv).add cv) sv
-  enforceCompression H Hα [av, bv, cv, sv]
+  compressStatement H Hα [av, bv, cv, sv]
 
 /-- Soundness of the whole example circuit, composing the circuit's own
-relation with `enforceCompression_sound`: the public inputs `(α, β, γ)`
+relation with `compressStatement_sound`: the public inputs `(α, β, γ)`
 commit to a statement `[a', b', c', a' + b' + c']`. -/
 theorem exampleCircuit_sound (H : CRHSchemeGadget F) (Hα : List F → F) (a b c sum : F)
     (k : Counters) (x : Assignment F)
@@ -71,7 +71,7 @@ theorem exampleCircuit_sound (H : CRHSchemeGadget F) (Hα : List F → F) (a b c
   obtain ⟨heq, hc⟩ := h
   have heq := FpVar.enforce_equal_sound _ _ (fun hc => by simpa [FpVar.isConstant] using hc.2)
     _ x heq
-  have hc := enforceCompression_sound _ _ _ _ x hc
+  have hc := compressStatement_sound _ _ _ _ x hc
   simp only [FpVar.eval_add, FpVar.eval_Var, AllocatedFp.eval_new, LinearCombination.eval_ofVar,
     Variable.eval_Witness, Counters.advance_num_instance_variables,
     Counters.advance_num_witness_variables, Op.inputCount, Op.witnessCount,

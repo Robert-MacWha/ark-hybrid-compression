@@ -2,7 +2,7 @@
 # Binding: in-circuit and out-of-circuit statements agree
 
 The verifier holds `(β, s')`, computes `(α, γ) = verifier Hα β s'`, and checks
-a proof against the public inputs `(α, β, γ)`. By `enforceCompression_sound`
+a proof against the public inputs `(α, β, γ)`. By `compressStatement_sound`
 the circuit forces `β = H(s)` and `γ = uhf (α + β) s` for the *in-circuit*
 statement `s`. Hence `uhf σ s = uhf σ s'` with `σ = α + β`.
 
@@ -108,12 +108,12 @@ theorem uhf_collision_shift_card_le [Fintype F] [DecidableEq F] {s s' : List F}
     exact add_right_cancel hxy
 
 /-- **Binding.** If the verifier accepts `(β, s')`, i.e. some assignment
-satisfies `enforce_compression` with public inputs `(Hα s', β, uhf (β + Hα s') s')`,
+satisfies the compression pattern with public inputs `(Hα s', β, uhf (β + Hα s') s')`,
 then the in-circuit statement `s` either equals `s'` or `σ = Hα s' + β` is a
 root of the difference polynomial (one of at most `n - 1` values). -/
 theorem binding [DecidableEq F] (H : CRHSchemeGadget F) (Hα : List F → F)
     (stmt : List (FpVar F)) (k : Counters) (a : Assignment F) (β : F) (s' : List F)
-    (hacc : ConstraintsHold a ((enforceCompression H Hα stmt).run k).2)
+    (hacc : ConstraintsHold a ((compressStatement H Hα stmt).run k).2)
     (hpub : (a.instance_assignment k.num_instance_variables,
       a.instance_assignment (k.num_instance_variables + 1),
       a.instance_assignment (k.num_instance_variables + 2)) =
@@ -121,7 +121,7 @@ theorem binding [DecidableEq F] (H : CRHSchemeGadget F) (Hα : List F → F)
     (hlen : s'.length = (stmt.map (·.eval a)).length) :
     stmt.map (·.eval a) = s' ∨
       Hα s' + β ∈ (uhfPoly (stmt.map (·.eval a)) - uhfPoly s').roots := by
-  have hsound := enforceCompression_sound H Hα stmt k a hacc
+  have hsound := compressStatement_sound H Hα stmt k a hacc
   simp only [verifierNative, hybridCompression, Prod.mk.injEq] at hpub
   obtain ⟨hα, hβ, hγ⟩ := hpub
   simp only [proverNative, hybridCompression, Prod.mk.injEq] at hsound

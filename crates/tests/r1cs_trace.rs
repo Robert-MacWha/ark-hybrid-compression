@@ -1,8 +1,8 @@
 //! Differential test of the Lean model in `formal/` against arkworks.
 //!
 //! The Lean model (`formal/HybridCompression/Examples.lean`) renders the
-//! constraint system of the compressed `ExampleCircuit` over `𝔽₁₇`, with a toy
-//! "sum" hash for both `alpha` and `beta`, into `formal/traces/example.trace`.
+//! constraint system of `exampleCircuit` over `𝔽₁₇`, with a toy "sum" hash for
+//! both `alpha` and `beta`, into `formal/traces/example.trace`.
 //! This test builds the same circuit with arkworks, renders its matrices and
 //! honest assignment in the same canonical format, and checks they match.
 //! Any divergence between the model's `FpVar` semantics and `ark-r1cs-std`
@@ -12,8 +12,13 @@ use std::{borrow::Borrow, collections::BTreeMap, fmt::Write};
 
 use ark_crypto_primitives::crh::{CRHScheme, constraints::CRHSchemeGadget};
 use ark_ff::{Fp64, MontBackend, MontConfig, PrimeField, Zero};
-use ark_hybrid_compression::test_utils::ExampleCircuit;
-use ark_r1cs_std::fields::{FieldVar, fp::FpVar};
+use ark_hybrid_compression::hybrid_compression;
+use ark_r1cs_std::{
+    alloc::AllocVar,
+    eq::EqGadget,
+    fields::{FieldVar, fp::FpVar},
+    prelude::GR1CSVar,
+};
 use ark_relations::gr1cs::{
     ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, OptimizationGoal,
     R1CS_PREDICATE_LABEL, SynthesisError,
@@ -61,6 +66,40 @@ impl CRHSchemeGadget<SumCRH, F17> for SumCRHGadget {
         input: &Self::InputVar,
     ) -> Result<Self::OutputVar, SynthesisError> {
         Ok(input.iter().rev().fold(FpVar::zero(), |acc, x| x + &acc))
+    }
+}
+
+/// Mirrors `exampleCircuit` in the Lean model: witnesses `a, b, c, sum`,
+/// enforces `a + b + c = sum`, and compresses the statement `[a, b, c, sum]`
+/// with the toy hash for both `alpha` and `beta`.
+struct SumCircuit {
+    a: F17,
+    b: F17,
+    c: F17,
+    sum: F17,
+}
+
+impl ConstraintSynthesizer<F17> for SumCircuit {
+    fn generate_constraints(self, cs: ConstraintSystemRef<F17>) -> Result<(), SynthesisError> {
+        let a = FpVar::new_witness(cs.clone(), || Ok(self.a))?;
+        let b = FpVar::new_witness(cs.clone(), || Ok(self.b))?;
+        let c = FpVar::new_witness(cs.clone(), || Ok(self.c))?;
+        let sum = FpVar::new_witness(cs.clone(), || Ok(self.sum))?;
+        (&a + &b + &c).enforce_equal(&sum)?;
+        let stmt = [a, b, c, sum];
+
+        let alpha = FpVar::new_input(cs.clone(), || {
+            let stmt: Vec<F17> = stmt.iter().map(|x| x.value()).collect::<Result<_, _>>()?;
+            SumCRH::evaluate(&(), stmt).map_err(|_| SynthesisError::Unsatisfiable)
+        })?;
+        let (beta, gamma) = hybrid_compression::constraints::prover::<SumCRH, F17, SumCRHGadget>(
+            &(),
+            alpha,
+            &stmt,
+        )?;
+        FpVar::new_input(cs.clone(), || beta.value())?.enforce_equal(&beta)?;
+        FpVar::new_input(cs, || gamma.value())?.enforce_equal(&gamma)?;
+        Ok(())
     }
 }
 
@@ -126,14 +165,12 @@ fn render_trace(cs: &ConstraintSystemRef<F17>) -> String {
 
 #[test]
 fn trace_matches_lean_model() {
-    let circuit = ExampleCircuit::<F17, SumCRH, SumCRH, SumCRHGadget>::new(
-        F17::from(1u64),
-        F17::from(2u64),
-        F17::from(3u64),
-        F17::from(6u64),
-        (),
-        (),
-    );
+    let circuit = SumCircuit {
+        a: F17::from(1u64),
+        b: F17::from(2u64),
+        c: F17::from(3u64),
+        sum: F17::from(6u64),
+    };
 
     let cs = ConstraintSystem::<F17>::new_ref();
     cs.set_optimization_goal(OptimizationGoal::Constraints);

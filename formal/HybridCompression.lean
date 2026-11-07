@@ -3,7 +3,7 @@
 
 Formal model and proofs for `ark-hybrid-compression`, mirroring the crate's
 module layout: `Uhf` ↔ `src/uhf`, `HybridCompression` ↔
-`src/hybrid_compression`, `Circuit` ↔ `src/circuit.rs`, `Security` for the
+`src/hybrid_compression`, `Circuit` for the README's compression pattern, `Security` for the
 binding theorem, `Examples` ↔ `src/test_utils`.
 -/
 import HybridCompression.Uhf
