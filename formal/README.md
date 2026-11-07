@@ -12,7 +12,6 @@ The `ark-r1cs/` package is the reusable model of `ark-relations` /
 `Circuit`, plus `Security` for the binding theorem and `Examples` for the
 trace checks).
 
-
 `ark-r1cs/` is a self-contained Lake package (required by path) so it can
 move to its own repository and be shared across circuit verifications.
 
