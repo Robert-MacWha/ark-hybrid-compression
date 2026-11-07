@@ -1,10 +1,10 @@
 //! Differential test of the Lean model in `lean/` against arkworks.
 //!
 //! `lean/Traces.lean` renders the constraint system of `exampleTrace` (witness
-//! a statement, then compress it) over `𝔽₁₇`, with a toy "sum" hash for both
-//! `alpha` and `beta`, into `target/traces`. This test builds the same circuit
-//! with arkworks, renders
-//! its matrices and honest assignment the same way, and checks they match. Any
+//! a statement, then compress it) over `𝔽₁₇`, with the toy hash `uhf(2, ·)` for
+//! both `alpha` and `beta`, into `target/traces`. This test builds the same
+//! circuit with arkworks, renders its matrices and honest assignment the same
+//! way, and checks they match. Any
 //! divergence between the model's `FpVar` semantics and `ark-r1cs-std` shows up
 //! here as a different trace. Needs the traces rendered first, so it is ignored
 //! by default: `just verify`.
@@ -12,7 +12,10 @@
 use std::borrow::Borrow;
 
 use ark_crypto_primitives::crh::{CRHScheme, constraints::CRHSchemeGadget};
-use ark_hybrid_compression::hybrid_compression::{self, compress};
+use ark_hybrid_compression::{
+    hybrid_compression::{self, compress},
+    test_utils::{uhf, uhf_gadget},
+};
 use ark_r1cs_std::{
     alloc::AllocVar,
     fields::{FieldVar, fp::FpVar},
@@ -20,10 +23,14 @@ use ark_r1cs_std::{
 use ark_r1cs_trace::{F17, read_traces, render_trace};
 use ark_relations::gr1cs::{ConstraintSystem, OptimizationGoal, SynthesisError};
 
-/// Toy hash: the sum of the inputs. Mirrors `sumCRH` in the Lean model.
-struct SumCRH;
+/// Seed of the toy hash, `uhf(SEED, ·)`.
+const SEED: u64 = 2;
 
-impl CRHScheme for SumCRH {
+/// Toy hash: the UHF at a fixed public seed. Mirrors `uhfCRH 2` in the Lean
+/// model.
+struct UhfCRH;
+
+impl CRHScheme for UhfCRH {
     type Input = [F17];
     type Output = F17;
     type Parameters = ();
@@ -38,14 +45,15 @@ impl CRHScheme for SumCRH {
         _parameters: &Self::Parameters,
         input: T,
     ) -> Result<Self::Output, ark_crypto_primitives::Error> {
-        Ok(input.borrow().iter().sum())
+        Ok(uhf(F17::from(SEED), input.borrow()))
     }
 }
 
-/// Mirrors `sumGadget`: `x₀ + (x₁ + (… + 0))`, emitting no constraints.
-struct SumCRHGadget;
+/// In-circuit `UhfCRH`: multiplies only by the constant seed, so it emits no
+/// constraints.
+struct UhfCRHGadget;
 
-impl CRHSchemeGadget<SumCRH, F17> for SumCRHGadget {
+impl CRHSchemeGadget<UhfCRH, F17> for UhfCRHGadget {
     type InputVar = [FpVar<F17>];
     type OutputVar = FpVar<F17>;
     type ParametersVar = ();
@@ -54,7 +62,7 @@ impl CRHSchemeGadget<SumCRH, F17> for SumCRHGadget {
         _parameters: &Self::ParametersVar,
         input: &Self::InputVar,
     ) -> Result<Self::OutputVar, SynthesisError> {
-        Ok(input.iter().rev().fold(FpVar::zero(), |acc, x| x + &acc))
+        Ok(uhf_gadget(FpVar::constant(F17::from(SEED)), input))
     }
 }
 
@@ -66,8 +74,8 @@ fn trace_matches_lean_model() {
 
     // Mirrors `exampleTrace` in the Lean model: witness the statement, then
     // compress it with the toy hash for both `alpha` and `beta`.
-    let statement = [1u64, 2, 3, 6].map(F17::from);
-    let (alpha, beta, gamma) = compress::<SumCRH, SumCRH, F17>(&(), &(), &statement).unwrap();
+    let statement = [1u64, 2, 3, 4].map(F17::from);
+    let (alpha, beta, gamma) = compress::<UhfCRH, UhfCRH, F17>(&(), &(), &statement).unwrap();
 
     let cs = ConstraintSystem::<F17>::new_ref();
     cs.set_optimization_goal(OptimizationGoal::Constraints);
@@ -75,7 +83,7 @@ fn trace_matches_lean_model() {
     let alpha_var = FpVar::new_input(cs.clone(), || Ok(alpha)).unwrap();
     let beta_var = FpVar::new_input(cs.clone(), || Ok(beta)).unwrap();
     let gamma_var = FpVar::new_input(cs.clone(), || Ok(gamma)).unwrap();
-    hybrid_compression::enforce::<SumCRH, F17, SumCRHGadget>(
+    hybrid_compression::enforce::<UhfCRH, F17, UhfCRHGadget>(
         &(),
         &alpha_var,
         &beta_var,

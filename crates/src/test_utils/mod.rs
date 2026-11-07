@@ -3,4 +3,5 @@
 
 pub mod poseidon;
 
+pub use crate::uhf::{constraints::uhf_gadget, uhf};
 pub use poseidon::poseidon_params;
