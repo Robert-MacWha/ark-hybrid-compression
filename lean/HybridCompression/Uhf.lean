@@ -14,8 +14,11 @@ open ArkR1CS
 
 variable {F : Type} [Field F]
 
-/-- Native UHF (`uhf::uhf`). -/
-def uhf (σ : F) (x : List F) : F := x.foldr (fun xi acc => acc * σ + xi) 0
+/-- Native UHF (`uhf::uhf`):
+`acc = 0; for xi in x.rev() { acc = acc * sigma + xi }`. -/
+def uhf (σ : F) : List F → F
+  | [] => 0
+  | xi :: rest => uhf σ rest * σ + xi
 
 @[simp] theorem uhf_nil (σ : F) : uhf σ [] = 0 := rfl
 
@@ -32,8 +35,8 @@ theorem uhf_append_zero (σ : F) (x : List F) : uhf σ (x ++ [0]) = uhf σ x := 
 
 variable [DecidableEq F]
 
-/-- In-circuit UHF (`uhf::constraints::uhf_gadget`):
-`acc = FpVar::zero(); for xi in x.rev() { acc = acc * sigma + xi }`. -/
+/-- In-circuit UHF (`uhf::constraints::uhf_gadget`), the same recursion with
+`acc * sigma` emitting a constraint. -/
 def uhfGadget (σ : FpVar F) : List (FpVar F) → CS F (FpVar F)
   | [] => pure FpVar.zero
   | xi :: rest => do
