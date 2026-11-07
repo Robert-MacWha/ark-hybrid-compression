@@ -46,9 +46,6 @@ def eval (a : Assignment F) (x : AllocatedFp F) : F := x.lc.eval a
 
 @[simp] theorem value_new (v : F) (lc : LinearCombination F) : (new v lc).value = v := rfl
 
-@[simp] theorem eval_mk (a : Assignment F) (v : F) (lc : LinearCombination F) :
-    (⟨v, lc⟩ : AllocatedFp F).eval a = lc.eval a := rfl
-
 /-! ### `AllocVar` -/
 
 /-- `AllocVar::new_variable` with `AllocationMode::Constant`:

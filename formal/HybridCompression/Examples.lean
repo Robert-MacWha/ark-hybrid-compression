@@ -19,9 +19,6 @@ open ArkR1CS
 
 variable {F : Type} [Field F] [DecidableEq F]
 
-/-- The relation `ExampleCircuit` enforces on its statement. -/
-def exampleRel (s : List F) : Prop := ∃ a b c : F, s = [a, b, c, a + b + c]
-
 /-- A toy hash gadget: the sum of the inputs, `x₀ + (x₁ + (… + 0))`. It emits
 no constraints. -/
 def sumGadget : List (FpVar F) → CS F (FpVar F)

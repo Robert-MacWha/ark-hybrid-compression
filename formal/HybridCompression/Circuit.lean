@@ -4,7 +4,7 @@
 `enforceCompression H Hα stmt` is `circuit::enforce_compression`: given the
 statement variables `stmt` a circuit has already witnessed, it
 
-1. computes `α = Hα(statement_raw)` natively and allocates it as a public input;
+1. computes `α = Hα(stmt values)` natively and allocates it as a public input;
 2. runs the hybrid-compression prover gadget, obtaining `(β, γ)`;
 3. allocates `β` and `γ` as public inputs and `enforce_equal`s them to the
    gadget outputs (`exposeOutput`).
