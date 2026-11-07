@@ -46,7 +46,7 @@ impl ConstraintSynthesizer<Fr> for SumCircuit {
         let beta = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.1))?;
         let gamma = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.2))?;
         let params = CRHParametersVar::new_constant(cs, &self.beta_params)?;
-        hybrid_compression::constraints::enforce::<CRH<Fr>, Fr, CRHGadget<Fr>>(
+        hybrid_compression::enforce::<CRH<Fr>, Fr, CRHGadget<Fr>>(
             &params,
             &alpha,
             &beta,

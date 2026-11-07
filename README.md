@@ -10,7 +10,7 @@ See [khovratovich/two-worlds-ref](https://github.com/khovratovich/two-worlds-ref
 
 ### Compressing an arkworks circuit
 
-The prover computes the public inputs `(alpha, beta, gamma)` from the statement with `hybrid_compression::compress`; the circuit allocates them as public inputs and enforces the compression with `hybrid_compression::constraints::enforce`.
+Computes the public inputs `(alpha, beta, gamma)` from the statement with `hybrid_compression::compress` and enforces the compression with `hybrid_compression::enforce`.
 
 ```rust
 use ark_crypto_primitives::{
@@ -50,9 +50,7 @@ impl ConstraintSynthesizer<Fr> for SumCircuit {
         let params = CRHParametersVar::new_constant(cs, &self.beta_params)?;
         let mut stmt = values;
         stmt.push(total);
-        hybrid_compression::constraints::enforce::<CRH<Fr>, Fr, CRHGadget<Fr>>(
-            &params, &alpha, &beta, &gamma, &stmt,
-        )
+        hybrid_compression::enforce::<CRH<Fr>, Fr, CRHGadget<Fr>>(&params, &alpha, &beta, &gamma, &stmt)
     }
 }
 

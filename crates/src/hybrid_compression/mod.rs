@@ -7,6 +7,8 @@ use crate::uhf::uhf;
 
 pub mod constraints;
 
+pub use constraints::enforce;
+
 /// Computes `(beta, gamma)` for the given `alpha`.
 ///
 /// See [`constraints::prover`] for the in-circuit gadget.
