@@ -10,82 +10,68 @@ See [khovratovich/two-worlds-ref](https://github.com/khovratovich/two-worlds-ref
 
 ### Compressing an arkworks circuit
 
-Arkworks circuits can be compressed by implementing the `CompressibleCircuit` trait.
+Computes the public inputs `(alpha, beta, gamma)` from the statement with `hybrid_compression::compress` and enforces the compression with `hybrid_compression::enforce`.
 
 ```rust
 use ark_crypto_primitives::{
-    crh::poseidon::{CRH, constraints::CRHGadget},
+    crh::poseidon::{CRH, constraints::{CRHGadget, CRHParametersVar}},
     sponge::poseidon::{PoseidonConfig, find_poseidon_ark_and_mds},
 };
 use ark_ed_on_bn254::Fr;
 use ark_ff::PrimeField;
-use ark_hybrid_compression::circuit::{CompressedCircuit, CompressibleCircuit, Flatten};
-use ark_r1cs_std::{
-    alloc::AllocVar,
-    eq::EqGadget,
-    fields::{FieldVar, fp::FpVar},
-};
+use ark_hybrid_compression::{KeccakCRH, hybrid_compression};
+use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::{FieldVar, fp::FpVar}};
 use ark_relations::gr1cs::{
     ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError,
 };
 
-/// Toy circuit that claims `total` is the sum of eight values.
-struct SumCircuit { values: [Fr; 8], total: Fr }
-struct SumStatement { values: Vec<FpVar<Fr>>, total: FpVar<Fr> }
+/// Toy circuit that claims `total` is the sum of eight values, with the
+/// statement `[values.., total]` compressed into `(alpha, beta, gamma)`.
+struct SumCircuit {
+    values: [Fr; 8],
+    total: Fr,
+    public_inputs: (Fr, Fr, Fr),
+    beta_params: PoseidonConfig<Fr>,
+}
 
-impl CompressibleCircuit<Fr> for SumCircuit {
-    type Statement = SumStatement;
-
-    fn verify(&self, cs: &ConstraintSystemRef<Fr>) -> Result<SumStatement, SynthesisError> {
-        // Inner circuit's constraints against the statement. Any public values 
-        // must be allocated as `FpVar`s, then returned in the `Statement` struct.
+impl ConstraintSynthesizer<Fr> for SumCircuit {
+    fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
         let values: Vec<FpVar<Fr>> = self
             .values
             .iter()
             .map(|v| FpVar::new_witness(cs.clone(), || Ok(*v)))
             .collect::<Result<_, _>>()?;
         let total = FpVar::new_witness(cs.clone(), || Ok(self.total))?;
+        values.iter().fold(FpVar::zero(), |acc, v| acc + v).enforce_equal(&total)?;
 
-        values
-            .iter()
-            .fold(FpVar::zero(), |acc, v| acc + v)
-            .enforce_equal(&total)?;
-
-        Ok(SumStatement { values, total })
+        let alpha = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.0))?;
+        let beta = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.1))?;
+        let gamma = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.2))?;
+        let params = CRHParametersVar::new_constant(cs, &self.beta_params)?;
+        let mut stmt = values;
+        stmt.push(total);
+        hybrid_compression::enforce::<CRH<Fr>, Fr, CRHGadget<Fr>>(&params, &alpha, &beta, &gamma, &stmt)
     }
 }
 
-impl Flatten<Fr> for SumStatement {
-    fn flatten(&self) -> Result<Vec<FpVar<Fr>>, SynthesisError> {
-        let mut stmt = self.values.clone();
-        stmt.push(self.total.clone());
-        Ok(stmt)
-    }
-}
-
-// Arbitrary values for the circuit statement.
 let values: [Fr; 8] = core::array::from_fn(|i| Fr::from(i as u64));
-let inner = SumCircuit { values, total: Fr::from(28u64) };
-
-// Poseidon parameters for the beta CRH.
+let total = Fr::from(28u64);
 let (ark, mds) = find_poseidon_ark_and_mds::<Fr>(Fr::MODULUS_BIT_SIZE as u64, 2, 8, 24, 0);
 let beta_params = PoseidonConfig::new(8, 24, 31, mds, ark, 2, 1);
 
-// Wrap the inner circuit in a `CompressedCircuit` that implements the hybrid 
-// compression algorithm.
-let circuit =
-    CompressedCircuit::<Fr, _, _, CRH<Fr>, CRHGadget<Fr>>::new_keccak(beta_params, inner);
-let compressed = circuit.compress().unwrap();
+// Compress the 9 statement elements into 3 public inputs, with keccak256 for
+// `alpha` (matching the Solidity verifier) and Poseidon for `beta`.
+let mut stmt = values.to_vec();
+stmt.push(total);
+let public_inputs =
+    hybrid_compression::compress::<KeccakCRH<Fr>, CRH<Fr>, Fr>(&(), &beta_params, &stmt).unwrap();
 
 let cs = ConstraintSystem::<Fr>::new_ref();
-circuit.generate_constraints(cs.clone()).unwrap();
+SumCircuit { values, total, public_inputs, beta_params }.generate_constraints(cs.clone()).unwrap();
 assert!(cs.is_satisfied().unwrap());
-
-// The 9 statement elements are compressed down to 3 public inputs.
-assert_eq!(compressed.statement_raw.len(), 9);
 assert_eq!(
     cs.instance_assignment().unwrap(),
-    vec![Fr::from(1u64), compressed.alpha, compressed.beta, compressed.gamma],
+    vec![Fr::from(1u64), public_inputs.0, public_inputs.1, public_inputs.2],
 );
 ```
 
