@@ -92,7 +92,7 @@ impl ConstraintSynthesizer<F17> for SumCircuit {
         let alpha = FpVar::new_input(cs.clone(), || Ok(public_inputs.0))?;
         let beta = FpVar::new_input(cs.clone(), || Ok(public_inputs.1))?;
         let gamma = FpVar::new_input(cs, || Ok(public_inputs.2))?;
-        hybrid_compression::constraints::enforce::<SumCRH, F17, SumCRHGadget>(
+        hybrid_compression::enforce::<SumCRH, F17, SumCRHGadget>(
             &(),
             &alpha,
             &beta,
