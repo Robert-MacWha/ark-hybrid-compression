@@ -111,26 +111,27 @@ theorem uhf_collision_shift_card_le [Fintype F] [DecidableEq F] {s s' : List F}
 satisfies the compressed circuit with public inputs `(Hα s', β, uhf (β + Hα s') s')`,
 then the in-circuit statement `s` either equals `s'` or `σ = Hα s' + β` is a
 root of the difference polynomial (one of at most `n - 1` values). -/
-theorem binding (H : CRHGadget F) (Hα : List F → F) (inner : CompressibleCircuit F)
-    (off : Offsets) (a : Assignment F) (β : F) (s' : List F)
-    (hacc : ConstraintsHold a ((compressedCircuit H Hα inner.verify).run off).2)
-    (hpub : (a.input (alphaIndex inner.verify off), a.input (alphaIndex inner.verify off + 1),
-      a.input (alphaIndex inner.verify off + 2)) =
+theorem binding [DecidableEq F] (H : CRHSchemeGadget F) (Hα : List F → F) (inner : CompressibleCircuit F)
+    (k : Counters) (a : Assignment F) (β : F) (s' : List F)
+    (hacc : ConstraintsHold a ((compressedCircuit H Hα inner.verify).run k).2)
+    (hpub : (a.instance_assignment (alphaIndex inner.verify k),
+      a.instance_assignment (alphaIndex inner.verify k + 1),
+      a.instance_assignment (alphaIndex inner.verify k + 2)) =
       ((verifierNative Hα β s').1, β, (verifierNative Hα β s').2))
-    (hlen : s'.length = (statementOf inner.verify off a).length) :
-    statementOf inner.verify off a = s' ∨
-      Hα s' + β ∈ (uhfPoly (statementOf inner.verify off a) - uhfPoly s').roots := by
-  obtain ⟨_, hsound⟩ := compressedCircuit_sound H Hα inner off a hacc
+    (hlen : s'.length = (statementOf inner.verify k a).length) :
+    statementOf inner.verify k a = s' ∨
+      Hα s' + β ∈ (uhfPoly (statementOf inner.verify k a) - uhfPoly s').roots := by
+  obtain ⟨_, hsound⟩ := compressedCircuit_sound H Hα inner k a hacc
   simp only [verifierNative, hybridCompression, Prod.mk.injEq] at hpub
   obtain ⟨hα, hβ, hγ⟩ := hpub
   simp only [proverNative, hybridCompression, Prod.mk.injEq] at hsound
   obtain ⟨hβ', hγ'⟩ := hsound
-  by_cases hs : statementOf inner.verify off a = s'
+  by_cases hs : statementOf inner.verify k a = s'
   · exact Or.inl hs
   · right
     apply uhf_collision_mem_roots hlen hs
-    have hσ : Hα s' + β =
-        a.input (alphaIndex inner.verify off) + H.native (statementOf inner.verify off a) := by
+    have hσ : Hα s' + β = a.instance_assignment (alphaIndex inner.verify k) +
+        H.evaluate_native (statementOf inner.verify k a) := by
       rw [hα, ← hβ', hβ]
     rw [hσ, ← hγ', hγ, ← hσ, add_comm]
 

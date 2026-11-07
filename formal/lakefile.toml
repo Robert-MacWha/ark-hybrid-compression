@@ -1,5 +1,5 @@
-name = "formal"
-defaultTargets = ["ArkR1CS", "HybridCompression"]
+name = "hybrid-compression"
+defaultTargets = ["HybridCompression"]
 
 [leanOptions]
 autoImplicit = false
@@ -10,8 +10,9 @@ name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
 rev = "v4.35.0"
 
-[[lean_lib]]
-name = "ArkR1CS"
+[[require]]
+name = "ark-r1cs"
+path = "ark-r1cs"
 
 [[lean_lib]]
 name = "HybridCompression"
