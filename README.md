@@ -10,25 +10,24 @@ See [khovratovich/two-worlds-ref](https://github.com/khovratovich/two-worlds-ref
 
 ### Compressing an arkworks circuit
 
-A circuit witnesses its statement as usual, then calls `enforce_compression`
-once. That allocates `(alpha, beta, gamma)` as the circuit's only public inputs
-and enforces the hybrid compression of the statement.
+A circuit witnesses its statement as usual, allocates `alpha` as a public input, runs the `hybrid_compression::constraints::prover` gadget to get `beta` and `gamma`, and exposes those as public inputs too.
 
 ```rust
 use ark_crypto_primitives::{
-    crh::poseidon::{CRH, constraints::CRHGadget},
+    crh::{
+        CRHScheme,
+        poseidon::{CRH, constraints::{CRHGadget, CRHParametersVar}},
+    },
     sponge::poseidon::{PoseidonConfig, find_poseidon_ark_and_mds},
 };
 use ark_ed_on_bn254::Fr;
 use ark_ff::PrimeField;
-use ark_hybrid_compression::{
-    KeccakCRH,
-    circuit::{compress, enforce_compression},
-};
+use ark_hybrid_compression::{KeccakCRH, hybrid_compression};
 use ark_r1cs_std::{
     alloc::AllocVar,
     eq::EqGadget,
     fields::{FieldVar, fp::FpVar},
+    prelude::GR1CSVar,
 };
 use ark_relations::gr1cs::{
     ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError,
@@ -52,17 +51,21 @@ impl ConstraintSynthesizer<Fr> for SumCircuit {
             .fold(FpVar::zero(), |acc, v| acc + v)
             .enforce_equal(&total)?;
 
-        // Compress the statement `[values.., total]` into the public inputs
-        // `(alpha, beta, gamma)`, using keccak256 for `alpha` (matching the
-        // Solidity verifier) and Poseidon for `beta`.
         let mut stmt = values;
         stmt.push(total);
-        enforce_compression::<Fr, KeccakCRH<Fr>, CRH<Fr>, CRHGadget<Fr>>(
-            cs,
-            &(),
-            &self.beta_params,
-            &stmt,
+
+        // Compress the statement `[values.., total]` into the public inputs
+        // `(alpha, beta, gamma)`, using keccak256 for `alpha` and Poseidon for `beta`.
+        let alpha = FpVar::new_input(cs.clone(), || {
+            let stmt: Vec<Fr> = stmt.iter().map(|x| x.value()).collect::<Result<_, _>>()?;
+            KeccakCRH::<Fr>::evaluate(&(), stmt).map_err(|_| SynthesisError::Unsatisfiable)
+        })?;
+        let params = CRHParametersVar::new_constant(cs.clone(), &self.beta_params)?;
+        let (beta, gamma) = hybrid_compression::constraints::prover::<CRH<Fr>, Fr, CRHGadget<Fr>>(
+            &params, alpha, &stmt,
         )?;
+        FpVar::new_input(cs.clone(), || beta.value())?.enforce_equal(&beta)?;
+        FpVar::new_input(cs, || gamma.value())?.enforce_equal(&gamma)?;
         Ok(())
     }
 }
@@ -79,7 +82,7 @@ let beta_params = PoseidonConfig::new(8, 24, 31, mds, ark, 2, 1);
 let mut stmt = values.to_vec();
 stmt.push(total);
 let (alpha, beta, gamma) =
-    compress::<Fr, KeccakCRH<Fr>, CRH<Fr>>(&(), &beta_params, &stmt).unwrap();
+    hybrid_compression::compress::<KeccakCRH<Fr>, CRH<Fr>, Fr>(&(), &beta_params, &stmt).unwrap();
 
 // ...and they are exactly what the circuit exposes: the 9 statement elements
 // are compressed down to 3 public inputs.

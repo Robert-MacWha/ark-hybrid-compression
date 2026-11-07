@@ -1,28 +1,24 @@
-use ark_crypto_primitives::crh::poseidon::{CRH, constraints::CRHGadget};
+use ark_crypto_primitives::crh::poseidon::CRH;
 use ark_ed_on_bn254::Fr;
 use ark_ff::UniformRand;
 use ark_hybrid_compression::{
-    KeccakCRH, hybrid_compression,
-    test_utils::{ExampleCircuit, poseidon_params},
+    KeccakCRH,
+    hybrid_compression::{compress, verifier},
+    test_utils::poseidon_params,
 };
 
-type TestCircuit = ExampleCircuit<Fr, KeccakCRH<Fr>, CRH<Fr>, CRHGadget<Fr>>;
-
-fn circuit() -> TestCircuit {
+fn statement() -> Vec<Fr> {
     let mut rng = ark_std::test_rng();
-    let a = Fr::rand(&mut rng);
-    let b = Fr::rand(&mut rng);
-    let c = Fr::rand(&mut rng);
-    ExampleCircuit::new(a, b, c, a + b + c, (), poseidon_params())
+    (0..4).map(|_| Fr::rand(&mut rng)).collect()
 }
 
 #[test]
 fn verifier_matches_prover() {
-    let circuit = circuit();
-    let (alpha, beta, gamma) = circuit.public_inputs().unwrap();
+    let stmt = statement();
+    let (alpha, beta, gamma) =
+        compress::<KeccakCRH<Fr>, CRH<Fr>, Fr>(&(), &poseidon_params(), &stmt).unwrap();
 
-    let (alpha_v, gamma_v) =
-        hybrid_compression::verifier::<KeccakCRH<Fr>, Fr>(&(), beta, &circuit.statement()).unwrap();
+    let (alpha_v, gamma_v) = verifier::<KeccakCRH<Fr>, Fr>(&(), beta, &stmt).unwrap();
 
     assert_eq!(alpha_v, alpha);
     assert_eq!(gamma_v, gamma);
@@ -30,14 +26,14 @@ fn verifier_matches_prover() {
 
 #[test]
 fn verifier_rejects_tampered_statement() {
-    let circuit = circuit();
-    let (alpha, beta, gamma) = circuit.public_inputs().unwrap();
+    let stmt = statement();
+    let (alpha, beta, gamma) =
+        compress::<KeccakCRH<Fr>, CRH<Fr>, Fr>(&(), &poseidon_params(), &stmt).unwrap();
 
-    let mut tampered = circuit.statement();
+    let mut tampered = stmt.clone();
     tampered[0] += Fr::from(1u64);
 
-    let (alpha_v, gamma_v) =
-        hybrid_compression::verifier::<KeccakCRH<Fr>, Fr>(&(), beta, &tampered).unwrap();
+    let (alpha_v, gamma_v) = verifier::<KeccakCRH<Fr>, Fr>(&(), beta, &tampered).unwrap();
 
     assert_ne!(alpha_v, alpha);
     assert_ne!(gamma_v, gamma);

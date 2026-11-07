@@ -1,6 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-pub mod circuit;
 pub mod hybrid_compression;
 #[cfg(feature = "alloy")]
 mod keccak;

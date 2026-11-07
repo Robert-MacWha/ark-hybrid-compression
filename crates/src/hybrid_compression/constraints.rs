@@ -11,7 +11,8 @@ use crate::uhf::constraints::uhf_gadget;
 ///
 /// # Security
 /// `alpha`, `beta`, and `gamma` must be allocated as public inputs. `stmt` may
-/// be allocated as a private witness.
+/// be allocated as a private witness. The compression binds `stmt` only for a
+/// fixed statement length, which verifiers must check.
 pub fn prover<H, F, CRH>(
     params: &CRH::ParametersVar,
     alpha: CRH::OutputVar,

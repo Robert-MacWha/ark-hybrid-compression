@@ -39,6 +39,23 @@ where
     hybrid_compression::<AlphaCRH, F>(alpha_params, beta, stmt)
 }
 
+/// Off-circuit hybrid compression: the public inputs `(alpha, beta, gamma)`
+/// of `stmt`.
+pub fn compress<AlphaCRH, BetaCRH, F>(
+    alpha_params: &AlphaCRH::Parameters,
+    beta_params: &BetaCRH::Parameters,
+    stmt: &[F],
+) -> Result<(F, F, F), ark_crypto_primitives::Error>
+where
+    AlphaCRH: CRHScheme<Input = [F], Output = F>,
+    BetaCRH: CRHScheme<Input = [F], Output = F>,
+    F: PrimeField,
+{
+    let alpha = AlphaCRH::evaluate(alpha_params, stmt)?;
+    let (beta, gamma) = prover::<BetaCRH, F>(beta_params, alpha, stmt)?;
+    Ok((alpha, beta, gamma))
+}
+
 fn hybrid_compression<CRH, F>(
     params: &CRH::Parameters,
     known: F,
