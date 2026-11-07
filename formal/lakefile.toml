@@ -13,7 +13,7 @@ rev = "v4.35.0"
 [[require]]
 name = "ark-r1cs"
 git = "https://github.com/Robert-MacWha/lean-ark-r1cs"
-rev = "a2ef5d101536685bc1e1c2a0f4c47877c8fe1521"
+rev = "69ea7f61efb635cf108d2bab77ccddfb49936a96"
 
 [[lean_lib]]
 name = "HybridCompression"
