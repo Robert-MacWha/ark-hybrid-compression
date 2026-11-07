@@ -45,15 +45,14 @@ theorem proverGadget_sound (H : CRHSchemeGadget F) (alpha : FpVar F) (stmt : Lis
     (((proverGadget H alpha stmt).run k).1.1.eval a,
       ((proverGadget H alpha stmt).run k).1.2.eval a) =
       proverNative H.evaluate_native (alpha.eval a) (stmt.map (·.eval a)) := by
-  simp only [proverGadget, CS.run_bind, CS.run_pure, List.append_nil, constraintsHold_append] at h ⊢
+  simp only [proverGadget, cs_run] at h ⊢
   obtain ⟨h₁, h₂⟩ := h
   rw [uhfGadget_sound _ _ _ _ h₂, FpVar.eval_add, H.sound _ _ _ h₁]
   rfl
 
 theorem proverGadget_inputCount (H : CRHSchemeGadget F) (alpha : FpVar F) (stmt : List (FpVar F))
     (k : Counters) : Op.inputCount ((proverGadget H alpha stmt).run k).2 = 0 := by
-  simp only [proverGadget, CS.run_bind, CS.run_pure, List.append_nil, Op.inputCount_append,
-    H.noInputs, uhfGadget_inputCount]
+  simp only [proverGadget, cs_run, H.noInputs, uhfGadget_inputCount]
 
 /-- `hybrid_compression::constraints::enforce`: `(alpha, beta, gamma)` is the
 compression of `stmt`. -/
@@ -72,7 +71,7 @@ theorem enforceGadget_sound (H : CRHSchemeGadget F) (alpha beta gamma : FpVar F)
     (h : ConstraintsHold a ((enforceGadget H alpha beta gamma stmt).run k).2) :
     (beta.eval a, gamma.eval a) =
       proverNative H.evaluate_native (alpha.eval a) (stmt.map (·.eval a)) := by
-  simp only [enforceGadget, CS.run_bind, constraintsHold_append] at h
+  simp only [enforceGadget, cs_run] at h
   obtain ⟨h₁, h₂, h₃⟩ := h
   have hp := proverGadget_sound H alpha stmt k a h₁
   rw [FpVar.enforce_equal_sound _ _ (fun hc => hβ hc.1) _ a h₂,
@@ -82,7 +81,6 @@ theorem enforceGadget_sound (H : CRHSchemeGadget F) (alpha beta gamma : FpVar F)
 theorem enforceGadget_inputCount (H : CRHSchemeGadget F) (alpha beta gamma : FpVar F)
     (stmt : List (FpVar F)) (k : Counters) :
     Op.inputCount ((enforceGadget H alpha beta gamma stmt).run k).2 = 0 := by
-  simp only [enforceGadget, CS.run_bind, Op.inputCount_append, proverGadget_inputCount,
-    FpVar.enforce_equal_inputCount]
+  simp only [enforceGadget, cs_run, proverGadget_inputCount, FpVar.enforce_equal_inputCount]
 
 end HybridCompression

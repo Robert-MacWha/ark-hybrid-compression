@@ -66,17 +66,12 @@ theorem exampleCircuit_sound (H : CRHSchemeGadget F) (Hα : List F → F) (a b c
         x.instance_assignment (k.num_instance_variables + 2)) =
         proverNative H.evaluate_native (x.instance_assignment k.num_instance_variables)
           [a', b', c', a' + b' + c'] := by
-  simp only [exampleCircuit, CS.run_bind, FpVar.run_new_witness, List.singleton_append,
-    constraintsHold_append, constraintsHold_witness] at h
+  simp only [exampleCircuit, cs_run] at h
   obtain ⟨heq, hc⟩ := h
   have heq := FpVar.enforce_equal_sound _ _ (fun hc => by simpa [FpVar.isConstant] using hc.2)
     _ x heq
   have hc := compressStatement_sound _ _ _ _ x hc
-  simp only [FpVar.eval_add, FpVar.eval_Var, AllocatedFp.eval_new, LinearCombination.eval_ofVar,
-    Variable.eval_Witness, Counters.advance_num_instance_variables,
-    Counters.advance_num_witness_variables, Op.inputCount, Op.witnessCount,
-    FpVar.enforce_equal_inputCount, Nat.add_zero, Nat.zero_add, List.map_cons,
-    List.map_nil] at heq hc
+  simp only [cs_run, cs_eval, FpVar.enforce_equal_inputCount, List.map_cons, List.map_nil] at heq hc
   rw [← heq] at hc
   exact ⟨_, _, _, hc⟩
 

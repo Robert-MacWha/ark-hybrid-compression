@@ -43,20 +43,16 @@ theorem compressStatement_sound (H : CRHSchemeGadget F) (Hα : List F → F)
       a.instance_assignment (k.num_instance_variables + 2)) =
       proverNative H.evaluate_native (a.instance_assignment k.num_instance_variables)
         (stmt.map (·.eval a)) := by
-  simp only [compressStatement, CS.run_bind, FpVar.run_new_input, List.singleton_append,
-    constraintsHold_input] at h
+  simp only [compressStatement, cs_run] at h
   have hs := enforceGadget_sound H _ _ _ stmt _ a (by simp [FpVar.isConstant])
     (by simp [FpVar.isConstant]) h
-  simp only [FpVar.eval_Var, AllocatedFp.eval_new, LinearCombination.eval_ofVar,
-    Variable.eval_Instance, Counters.advance_num_instance_variables, Op.inputCount,
-    Nat.zero_add] at hs
+  simp only [cs_run, cs_eval] at hs
   rw [show k.num_instance_variables + 2 = k.num_instance_variables + 1 + 1 from rfl]
   exact hs
 
 theorem compressStatement_inputCount (H : CRHSchemeGadget F) (Hα : List F → F)
     (stmt : List (FpVar F)) (k : Counters) :
     Op.inputCount ((compressStatement H Hα stmt).run k).2 = 3 := by
-  simp only [compressStatement, CS.run_bind, FpVar.run_new_input, List.singleton_append,
-    Op.inputCount, enforceGadget_inputCount]
+  simp only [compressStatement, cs_run, enforceGadget_inputCount]
 
 end HybridCompression

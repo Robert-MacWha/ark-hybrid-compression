@@ -47,7 +47,7 @@ theorem uhfGadget_sound (σ : FpVar F) (x : List (FpVar F)) (k : Counters) (a : 
   induction x generalizing k with
   | nil => simp [uhfGadget]
   | cons xi rest ih =>
-    simp only [uhfGadget, CS.run_bind, CS.run_pure, List.append_nil, constraintsHold_append] at h ⊢
+    simp only [uhfGadget, cs_run] at h ⊢
     obtain ⟨h₁, h₂⟩ := h
     rw [FpVar.eval_add, FpVar.mul_sound _ _ _ _ h₂, ih _ h₁, List.map_cons, uhf_cons]
 
@@ -56,7 +56,6 @@ theorem uhfGadget_inputCount (σ : FpVar F) (x : List (FpVar F)) (k : Counters) 
   induction x generalizing k with
   | nil => simp [uhfGadget, Op.inputCount]
   | cons xi rest ih =>
-    simp only [uhfGadget, CS.run_bind, CS.run_pure, List.append_nil, Op.inputCount_append, ih,
-      FpVar.mul_inputCount, Nat.add_zero]
+    simp only [uhfGadget, cs_run, ih, FpVar.mul_inputCount]
 
 end HybridCompression
