@@ -5,12 +5,9 @@ use alloy::{
     sol,
 };
 use ark_crypto_primitives::{
-    crh::{
-        CRHScheme,
-        poseidon::{
-            CRH,
-            constraints::{CRHGadget, CRHParametersVar},
-        },
+    crh::poseidon::{
+        CRH,
+        constraints::{CRHGadget, CRHParametersVar},
     },
     sponge::poseidon::PoseidonConfig,
 };
@@ -21,7 +18,7 @@ use ark_hybrid_compression::{
     hybrid_compression::{self, compress},
     test_utils::poseidon_params,
 };
-use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::fp::FpVar, prelude::GR1CSVar};
+use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::fp::FpVar};
 use ark_relations::gr1cs::{
     ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError,
 };
@@ -33,6 +30,7 @@ struct SumCircuit {
     b: Fr,
     c: Fr,
     sum: Fr,
+    public_inputs: (Fr, Fr, Fr),
     beta_params: PoseidonConfig<Fr>,
 }
 
@@ -43,19 +41,18 @@ impl ConstraintSynthesizer<Fr> for SumCircuit {
         let c = FpVar::new_witness(cs.clone(), || Ok(self.c))?;
         let sum = FpVar::new_witness(cs.clone(), || Ok(self.sum))?;
         (&a + &b + &c).enforce_equal(&sum)?;
-        let stmt = [a, b, c, sum];
 
-        let alpha = FpVar::new_input(cs.clone(), || {
-            let stmt: Vec<Fr> = stmt.iter().map(|x| x.value()).collect::<Result<_, _>>()?;
-            KeccakCRH::<Fr>::evaluate(&(), stmt).map_err(|_| SynthesisError::Unsatisfiable)
-        })?;
-        let params = CRHParametersVar::new_constant(cs.clone(), &self.beta_params)?;
-        let (beta, gamma) = hybrid_compression::constraints::prover::<CRH<Fr>, Fr, CRHGadget<Fr>>(
-            &params, alpha, &stmt,
-        )?;
-        FpVar::new_input(cs.clone(), || beta.value())?.enforce_equal(&beta)?;
-        FpVar::new_input(cs, || gamma.value())?.enforce_equal(&gamma)?;
-        Ok(())
+        let alpha = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.0))?;
+        let beta = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.1))?;
+        let gamma = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.2))?;
+        let params = CRHParametersVar::new_constant(cs, &self.beta_params)?;
+        hybrid_compression::constraints::enforce::<CRH<Fr>, Fr, CRHGadget<Fr>>(
+            &params,
+            &alpha,
+            &beta,
+            &gamma,
+            &[a, b, c, sum],
+        )
     }
 }
 
@@ -92,6 +89,7 @@ async fn circuit_matches_solidity() {
         b,
         c,
         sum: a + b + c,
+        public_inputs: (alpha, beta, gamma),
         beta_params,
     }
     .generate_constraints(cs.clone())
