@@ -18,40 +18,32 @@ use ark_hybrid_compression::{
     hybrid_compression::{self, compress},
     test_utils::poseidon_params,
 };
-use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::fp::FpVar};
+use ark_r1cs_std::{alloc::AllocVar, fields::fp::FpVar};
 use ark_relations::gr1cs::{
     ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError,
 };
 
-/// Knowledge of `a, b, c` summing to `sum`, with the statement `[a, b, c, sum]`
-/// compressed into `(alpha, beta, gamma)`.
-struct SumCircuit {
-    a: Fr,
-    b: Fr,
-    c: Fr,
-    sum: Fr,
+/// Witnesses the statement and compresses it into `(alpha, beta, gamma)`.
+struct CompressCircuit {
+    statement: Vec<Fr>,
     public_inputs: (Fr, Fr, Fr),
     beta_params: PoseidonConfig<Fr>,
 }
 
-impl ConstraintSynthesizer<Fr> for SumCircuit {
+impl ConstraintSynthesizer<Fr> for CompressCircuit {
     fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
-        let a = FpVar::new_witness(cs.clone(), || Ok(self.a))?;
-        let b = FpVar::new_witness(cs.clone(), || Ok(self.b))?;
-        let c = FpVar::new_witness(cs.clone(), || Ok(self.c))?;
-        let sum = FpVar::new_witness(cs.clone(), || Ok(self.sum))?;
-        (&a + &b + &c).enforce_equal(&sum)?;
+        let statement = self
+            .statement
+            .iter()
+            .map(|v| FpVar::new_witness(cs.clone(), || Ok(*v)))
+            .collect::<Result<Vec<_>, _>>()?;
 
         let alpha = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.0))?;
         let beta = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.1))?;
         let gamma = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.2))?;
         let params = CRHParametersVar::new_constant(cs, &self.beta_params)?;
         hybrid_compression::enforce::<CRH<Fr>, Fr, CRHGadget<Fr>>(
-            &params,
-            &alpha,
-            &beta,
-            &gamma,
-            &[a, b, c, sum],
+            &params, &alpha, &beta, &gamma, &statement,
         )
     }
 }
@@ -77,18 +69,15 @@ async fn circuit_matches_solidity() {
         .await
         .unwrap();
 
-    let [a, b, c] = from_fn(|i| Fr::from(i as u64));
+    let statement: [Fr; 4] = from_fn(|i| Fr::from(i as u64));
     let beta_params = poseidon_params();
     let (alpha, beta, gamma) =
-        compress::<KeccakCRH<Fr>, CRH<Fr>, Fr>(&(), &beta_params, &[a, b, c, a + b + c]).unwrap();
+        compress::<KeccakCRH<Fr>, CRH<Fr>, Fr>(&(), &beta_params, &statement).unwrap();
 
     // The circuit is satisfied and exposes exactly the natively computed public inputs.
     let cs = ConstraintSystem::<Fr>::new_ref();
-    SumCircuit {
-        a,
-        b,
-        c,
-        sum: a + b + c,
+    CompressCircuit {
+        statement: statement.to_vec(),
         public_inputs: (alpha, beta, gamma),
         beta_params,
     }
@@ -112,14 +101,7 @@ async fn circuit_matches_solidity() {
         .unwrap();
 
     contract
-        .submit(
-            a.into(),
-            b.into(),
-            c.into(),
-            (a + b + c).into(),
-            beta.into(),
-            vec![].into(),
-        )
+        .submit(statement.map(Into::into), beta.into(), vec![].into())
         .call()
         .await
         .unwrap();
