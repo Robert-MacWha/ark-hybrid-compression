@@ -1,186 +1,79 @@
-//! Circuit abstraction for hybrid compression.
-
-use std::marker::PhantomData;
+//! Hybrid compression of a circuit's public statement.
+//!
+//! A circuit witnesses its statement as `FpVar`s however it likes, then calls
+//! [`enforce_compression`] once. That allocates `(alpha, beta, gamma)` as the
+//! circuit's public inputs and enforces the hybrid compression of the
+//! statement, so the statement itself stays private. The prover computes the
+//! same public inputs natively with [`compress`]; a verifier recomputes them
+//! from `(beta, statement)` with [`hybrid_compression::verifier`] (Rust) or
+//! `LibHybridCompression.verifier` (Solidity).
+//!
+//! # Security
+//! The statement elements passed to [`enforce_compression`] must be the
+//! circuit's *entire* public statement, and the circuit must allocate no other
+//! public inputs. The compression binds the statement only for a fixed
+//! statement length, which the verifier has to check.
 
 use ark_crypto_primitives::crh::{CRHScheme, constraints::CRHSchemeGadget};
 use ark_ff::PrimeField;
 use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::fp::FpVar, prelude::GR1CSVar};
-use ark_relations::gr1cs::{
-    ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, OptimizationGoal, SynthesisError,
-};
+use ark_relations::gr1cs::{ConstraintSystemRef, SynthesisError};
 
-use crate::hybrid_compression::constraints;
+use crate::hybrid_compression::{constraints, prover};
 
-/// A circuit whose public inputs can be compressed.
-pub trait CompressibleCircuit<F: PrimeField> {
-    /// The circuit's public statement.
-    type Statement: Flatten<F>;
-
-    /// Witness the circuit and enforce its relations, returning a structured statement.
-    fn verify(&self, cs: &ConstraintSystemRef<F>) -> Result<Self::Statement, SynthesisError>;
+/// The compressed public inputs as allocated in the circuit, in instance order.
+#[derive(Clone, Debug)]
+pub struct PublicInputs<F: PrimeField> {
+    /// The out-of-circuit hash of the statement.
+    pub alpha: FpVar<F>,
+    /// The circuit-friendly hash of the statement.
+    pub beta: FpVar<F>,
+    /// The UHF of the statement, seeded with `alpha + beta`.
+    pub gamma: FpVar<F>,
 }
 
-/// A circuit's flattened public statement.
+/// Allocates `(alpha, beta, gamma)` as public inputs and enforces the hybrid
+/// compression of `stmt`.
 ///
-/// The returned list of values is compressed into `(alpha, beta, gamma)`.
-pub trait Flatten<F: PrimeField> {
-    fn flatten(&self) -> Result<Vec<FpVar<F>>, SynthesisError>;
-}
-
-/// A compressed public statement.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Compressed<F, S> {
-    /// Public: the out-of-circuit hash of the statement.
-    pub alpha: F,
-    /// Public: the circuit-friendly hash of the statement.
-    pub beta: F,
-    /// Public: the UHF of the statement, seeded with `alpha + beta`.
-    pub gamma: F,
-
-    /// The statement as flat field values, in [`Flatten`] order.
-    pub statement_raw: Vec<F>,
-
-    /// The inner circuit's structured statement.
-    pub statement: S,
-}
-
-/// Compressed circuit wrapping an inner compressible circuit.
-#[derive(Clone, Debug, Default)]
-pub struct CompressedCircuit<F, C, AlphaCRH, BetaCRH, BetaCRHGadget>
+/// `alpha` is computed natively from the statement's assigned values with
+/// `AlphaCRH` (only in proving mode; in setup mode no values are needed),
+/// `beta` and `gamma` are computed in-circuit with `BetaCRHGadget`.
+pub fn enforce_compression<F, AlphaCRH, BetaCRH, BetaCRHGadget>(
+    cs: ConstraintSystemRef<F>,
+    alpha_params: &AlphaCRH::Parameters,
+    beta_params: &BetaCRH::Parameters,
+    stmt: &[FpVar<F>],
+) -> Result<PublicInputs<F>, SynthesisError>
 where
     F: PrimeField,
-    C: CompressibleCircuit<F>,
     AlphaCRH: CRHScheme<Input = [F], Output = F>,
     BetaCRH: CRHScheme<Input = [F], Output = F>,
     BetaCRHGadget: CRHSchemeGadget<BetaCRH, F, InputVar = [FpVar<F>], OutputVar = FpVar<F>>,
 {
-    pub alpha_params: AlphaCRH::Parameters,
-    pub beta_params: BetaCRH::Parameters,
-    pub inner: C,
-    _beta_crh_gadget: PhantomData<BetaCRHGadget>,
+    let alpha = FpVar::new_input(cs.clone(), || {
+        let stmt_raw: Vec<F> = stmt.iter().map(GR1CSVar::value).collect::<Result<_, _>>()?;
+        AlphaCRH::evaluate(alpha_params, stmt_raw.as_slice())
+            .map_err(|_| SynthesisError::Unsatisfiable)
+    })?;
+
+    let params_var = BetaCRHGadget::ParametersVar::new_constant(cs.clone(), beta_params)?;
+    let (beta_var, gamma_var) =
+        constraints::prover::<BetaCRH, F, BetaCRHGadget>(&params_var, alpha.clone(), stmt)?;
+
+    // Expose `beta` and `gamma` as public outputs, enforcing equality with the
+    // computed values.
+    let beta = FpVar::new_input(cs.clone(), || beta_var.value())?;
+    beta.enforce_equal(&beta_var)?;
+
+    let gamma = FpVar::new_input(cs, || gamma_var.value())?;
+    gamma.enforce_equal(&gamma_var)?;
+
+    Ok(PublicInputs { alpha, beta, gamma })
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum CompressError {
-    #[error(transparent)]
-    Synthesis(#[from] SynthesisError),
-    /// Stringified `ark_crypto_primitives::Error` because that type isn't `Sync`.
-    #[error("hybrid compression: {0}")]
-    Compression(String),
-}
-
-#[cfg(feature = "alloy")]
-impl<F, C, BetaCRH, BetaCRHGadget>
-    CompressedCircuit<F, C, crate::KeccakCRH<F>, BetaCRH, BetaCRHGadget>
-where
-    F: PrimeField,
-    C: CompressibleCircuit<F>,
-    BetaCRH: CRHScheme<Input = [F], Output = F>,
-    BetaCRHGadget: CRHSchemeGadget<BetaCRH, F, InputVar = [FpVar<F>], OutputVar = FpVar<F>>,
-{
-    /// Constructs a circuit using [`KeccakCRH`](crate::KeccakCRH) as the alpha hash.
-    ///
-    /// Matches Solidity's `LibHybridCompression.hash`.
-    pub fn new_keccak(beta_params: BetaCRH::Parameters, inner: C) -> Self {
-        Self::new((), beta_params, inner)
-    }
-}
-
-impl<F, C, AlphaCRH, BetaCRH, BetaCRHGadget>
-    CompressedCircuit<F, C, AlphaCRH, BetaCRH, BetaCRHGadget>
-where
-    F: PrimeField,
-    C: CompressibleCircuit<F>,
-    AlphaCRH: CRHScheme<Input = [F], Output = F>,
-    BetaCRH: CRHScheme<Input = [F], Output = F>,
-    BetaCRHGadget: CRHSchemeGadget<BetaCRH, F, InputVar = [FpVar<F>], OutputVar = FpVar<F>>,
-{
-    /// Constructs a circuit using the given alpha and beta CRHs.
-    pub fn new(
-        alpha_params: AlphaCRH::Parameters,
-        beta_params: BetaCRH::Parameters,
-        inner: C,
-    ) -> Self {
-        Self {
-            alpha_params,
-            beta_params,
-            inner,
-            _beta_crh_gadget: PhantomData,
-        }
-    }
-
-    /// Runs inner's `verify` method to witness the circuit, then flattens and
-    /// compresses its statement.
-    pub fn compress(&self) -> Result<Compressed<F, C::Statement>, CompressError> {
-        let cs = ConstraintSystem::new_ref();
-        cs.set_optimization_goal(OptimizationGoal::Constraints);
-        let statement = self.inner.verify(&cs)?;
-        cs.finalize();
-
-        self.compress_with_statement(statement)
-    }
-
-    fn compress_with_statement(
-        &self,
-        statement: C::Statement,
-    ) -> Result<Compressed<F, C::Statement>, CompressError> {
-        let statement_raw: Vec<F> = statement
-            .flatten()?
-            .iter()
-            .map(GR1CSVar::value)
-            .collect::<Result<_, _>>()?;
-
-        let (alpha, beta, gamma) =
-            compress::<F, AlphaCRH, BetaCRH>(&self.alpha_params, &self.beta_params, &statement_raw)
-                .map_err(|e| CompressError::Compression(e.to_string()))?;
-
-        Ok(Compressed {
-            alpha,
-            beta,
-            gamma,
-            statement_raw,
-            statement,
-        })
-    }
-}
-
-impl<F, C, AlphaCRH, BetaCRH, BetaCRHGadget> ConstraintSynthesizer<F>
-    for CompressedCircuit<F, C, AlphaCRH, BetaCRH, BetaCRHGadget>
-where
-    F: PrimeField,
-    C: CompressibleCircuit<F>,
-    AlphaCRH: CRHScheme<Input = [F], Output = F>,
-    BetaCRH: CRHScheme<Input = [F], Output = F>,
-    BetaCRHGadget: CRHSchemeGadget<BetaCRH, F, InputVar = [FpVar<F>], OutputVar = FpVar<F>>,
-{
-    fn generate_constraints(self, cs: ConstraintSystemRef<F>) -> Result<(), SynthesisError> {
-        //? Compute and flatten the statement
-        let statement = self.inner.verify(&cs)?;
-        let stmt = statement.flatten()?;
-        let compressed = self.compress_with_statement(statement)?;
-
-        //? Enforce hybrid compression of the flattened statement
-        let alpha_var = FpVar::new_input(cs.clone(), || Ok(compressed.alpha))?;
-        let params_var = BetaCRHGadget::ParametersVar::new_constant(cs.clone(), &self.beta_params)?;
-
-        let (beta_var, gamma_var) =
-            constraints::prover::<BetaCRH, F, BetaCRHGadget>(&params_var, alpha_var, &stmt)?;
-
-        //? Expose the `beta` and `gamma` outputs as public outputs, enforcing equality with the
-        //? computed values.
-        let beta_pub = FpVar::new_input(cs.clone(), || beta_var.value())?;
-        beta_pub.enforce_equal(&beta_var)?;
-
-        let gamma_pub = FpVar::new_input(cs, || gamma_var.value())?;
-        gamma_pub.enforce_equal(&gamma_var)?;
-
-        Ok(())
-    }
-}
-
-/// Off-circuit hybrid compression: folds `stmt` into `(alpha, beta,
-/// gamma)`.
-fn compress<F, AlphaCRH, BetaCRH>(
+/// Off-circuit hybrid compression: the public inputs `(alpha, beta, gamma)`
+/// of `stmt`, as [`enforce_compression`] allocates them.
+pub fn compress<F, AlphaCRH, BetaCRH>(
     alpha_params: &AlphaCRH::Parameters,
     beta_params: &BetaCRH::Parameters,
     stmt: &[F],
@@ -190,20 +83,9 @@ where
     AlphaCRH: CRHScheme<Input = [F], Output = F>,
     BetaCRH: CRHScheme<Input = [F], Output = F>,
 {
-    use crate::hybrid_compression::prover;
-
     let alpha = AlphaCRH::evaluate(alpha_params, stmt)?;
     let (beta, gamma) = prover::<BetaCRH, F>(beta_params, alpha, stmt)?;
     Ok((alpha, beta, gamma))
-}
-
-impl From<CompressError> for SynthesisError {
-    fn from(value: CompressError) -> Self {
-        match value {
-            CompressError::Synthesis(s) => s,
-            CompressError::Compression(_) => SynthesisError::Unsatisfiable,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -211,88 +93,71 @@ mod test {
     use ark_crypto_primitives::crh::poseidon::{CRH, constraints::CRHGadget};
     use ark_ed_on_bn254::Fr;
     use ark_ff::UniformRand;
+    use ark_relations::gr1cs::{ConstraintSynthesizer, ConstraintSystem, SynthesisMode};
 
-    use super::*;
     use crate::test_utils::{ExampleCircuit, poseidon_params};
 
-    type TestCompressed =
-        CompressedCircuit<Fr, ExampleCircuit<Fr>, CRH<Fr>, CRH<Fr>, CRHGadget<Fr>>;
+    type TestCircuit = ExampleCircuit<Fr, CRH<Fr>, CRH<Fr>, CRHGadget<Fr>>;
 
-    fn test_circuit(rng: &mut impl ark_std::rand::Rng) -> ExampleCircuit<Fr> {
+    fn test_circuit(rng: &mut impl ark_std::rand::Rng) -> TestCircuit {
         let a = Fr::rand(rng);
         let b = Fr::rand(rng);
         let c = Fr::rand(rng);
-        ExampleCircuit {
-            a,
-            b,
-            c,
-            sum: a + b + c,
-        }
-    }
-
-    #[test]
-    fn test_compress_matches_native() {
-        let mut rng = ark_std::test_rng();
         let params = poseidon_params();
-        let inner = test_circuit(&mut rng);
-        let stmt = vec![inner.a, inner.b, inner.c, inner.sum];
-
-        let circuit = TestCompressed::new(params.clone(), params.clone(), inner);
-        let compressed = circuit.compress().unwrap();
-
-        let (alpha, beta, gamma) =
-            compress::<Fr, CRH<Fr>, CRH<Fr>>(&params, &params, &stmt).unwrap();
-        assert_eq!(compressed.statement_raw, stmt);
-        assert_eq!(compressed.alpha, alpha);
-        assert_eq!(compressed.beta, beta);
-        assert_eq!(compressed.gamma, gamma);
+        ExampleCircuit::new(a, b, c, a + b + c, params.clone(), params)
     }
 
     #[test]
     fn test_public_inputs_are_alpha_beta_gamma() {
         let mut rng = ark_std::test_rng();
-        let params = poseidon_params();
-        let circuit = TestCompressed::new(params.clone(), params, test_circuit(&mut rng));
-        let compressed = circuit.compress().unwrap();
-
-        let cs = ConstraintSystem::<Fr>::new_ref();
-        circuit.generate_constraints(cs.clone()).unwrap();
-
-        // The statement stays witnessed: only the compressed form is public.
-        assert_eq!(
-            cs.instance_assignment().unwrap(),
-            vec![
-                Fr::from(1u64),
-                compressed.alpha,
-                compressed.beta,
-                compressed.gamma
-            ]
-        );
-    }
-
-    #[test]
-    fn test_constraints_satisfied() {
-        let mut rng = ark_std::test_rng();
-        let params = poseidon_params();
-        let circuit = TestCompressed::new(params.clone(), params, test_circuit(&mut rng));
+        let circuit = test_circuit(&mut rng);
+        let (alpha, beta, gamma) = circuit.public_inputs().unwrap();
 
         let cs = ConstraintSystem::<Fr>::new_ref();
         circuit.generate_constraints(cs.clone()).unwrap();
         assert!(cs.is_satisfied().unwrap());
+
+        // The statement stays witnessed: only the compressed form is public.
+        assert_eq!(
+            cs.instance_assignment().unwrap(),
+            vec![Fr::from(1u64), alpha, beta, gamma]
+        );
+    }
+
+    #[test]
+    fn test_setup_mode_needs_no_values() {
+        let mut rng = ark_std::test_rng();
+
+        let prove = ConstraintSystem::<Fr>::new_ref();
+        test_circuit(&mut rng)
+            .generate_constraints(prove.clone())
+            .unwrap();
+
+        let setup = ConstraintSystem::<Fr>::new_ref();
+        setup.set_mode(SynthesisMode::Setup);
+        test_circuit(&mut rng)
+            .generate_constraints(setup.clone())
+            .unwrap();
+
+        assert_eq!(setup.num_constraints(), prove.num_constraints());
+        assert_eq!(
+            setup.num_instance_variables(),
+            prove.num_instance_variables()
+        );
+        assert_eq!(setup.num_witness_variables(), prove.num_witness_variables());
     }
 
     #[test]
     fn test_bad_witness_unsatisfied() {
         let params = poseidon_params();
-        let inner = ExampleCircuit {
-            a: Fr::from(3u64),
-            b: Fr::from(5u64),
-            c: Fr::from(7u64),
-            sum: Fr::from(16u64),
-        };
-
-        // Compression only reads the flattened values, so it still succeeds.
-        let circuit = TestCompressed::new(params.clone(), params, inner);
+        let circuit = TestCircuit::new(
+            Fr::from(3u64),
+            Fr::from(5u64),
+            Fr::from(7u64),
+            Fr::from(16u64),
+            params.clone(),
+            params,
+        );
 
         let cs = ConstraintSystem::<Fr>::new_ref();
         circuit.generate_constraints(cs.clone()).unwrap();
