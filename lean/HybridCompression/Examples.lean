@@ -24,7 +24,7 @@ def sumGadget : List (FpVar F) → CS F (FpVar F)
   | [] => pure FpVar.zero
   | x :: xs => do
     let rest ← sumGadget xs
-    pure (x.add rest)
+    pure (x + rest)
 
 theorem sumGadget_sound (xs : List (FpVar F)) (k : Counters) (a : Assignment F) :
     ((sumGadget xs).run k).1.eval a = (xs.map (·.eval a)).sum := by

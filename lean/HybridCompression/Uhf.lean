@@ -39,7 +39,7 @@ def uhfGadget (σ : FpVar F) : List (FpVar F) → CS F (FpVar F)
   | xi :: rest => do
     let acc ← uhfGadget σ rest
     let prod ← acc.mul σ
-    pure (prod.add xi)
+    pure (prod + xi)
 
 theorem uhfGadget_sound (σ : FpVar F) (x : List (FpVar F)) (k : Counters) (a : Assignment F)
     (h : ConstraintsHold a ((uhfGadget σ x).run k).2) :
@@ -49,7 +49,7 @@ theorem uhfGadget_sound (σ : FpVar F) (x : List (FpVar F)) (k : Counters) (a : 
   | cons xi rest ih =>
     simp only [uhfGadget, cs_run] at h ⊢
     obtain ⟨h₁, h₂⟩ := h
-    rw [FpVar.eval_add, FpVar.mul_sound _ _ _ _ h₂, ih _ h₁, List.map_cons, uhf_cons]
+    rw [FpVar.eval_hAdd, FpVar.mul_sound _ _ _ _ h₂, ih _ h₁, List.map_cons, uhf_cons]
 
 theorem uhfGadget_inputCount (σ : FpVar F) (x : List (FpVar F)) (k : Counters) :
     Op.inputCount ((uhfGadget σ x).run k).2 = 0 := by

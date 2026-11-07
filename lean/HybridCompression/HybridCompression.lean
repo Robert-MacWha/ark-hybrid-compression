@@ -33,7 +33,7 @@ def verifierNative (Hα : List F → F) (β : F) (stmt : List F) : F × F :=
 def proverGadget (H : CRHSchemeGadget F) (alpha : FpVar F) (stmt : List (FpVar F)) :
     CS F (FpVar F × FpVar F) := do
   let beta ← H.evaluate stmt
-  let sigma := alpha.add beta
+  let sigma := alpha + beta
   let gamma ← uhfGadget sigma stmt
   pure (beta, gamma)
 
@@ -47,7 +47,7 @@ theorem proverGadget_sound (H : CRHSchemeGadget F) (alpha : FpVar F) (stmt : Lis
       proverNative H.evaluate_native (alpha.eval a) (stmt.map (·.eval a)) := by
   simp only [proverGadget, cs_run] at h ⊢
   obtain ⟨h₁, h₂⟩ := h
-  rw [uhfGadget_sound _ _ _ _ h₂, FpVar.eval_add, H.sound _ _ _ h₁]
+  rw [uhfGadget_sound _ _ _ _ h₂, FpVar.eval_hAdd, H.sound _ _ _ h₁]
   rfl
 
 theorem proverGadget_inputCount (H : CRHSchemeGadget F) (alpha : FpVar F) (stmt : List (FpVar F))
@@ -59,8 +59,8 @@ compression of `stmt`. -/
 def enforceGadget (H : CRHSchemeGadget F) (alpha beta gamma : FpVar F) (stmt : List (FpVar F)) :
     CS F Unit := do
   let bg ← proverGadget H alpha stmt
-  EqGadget.enforce_equal beta bg.1
-  EqGadget.enforce_equal gamma bg.2
+  beta.enforce_equal bg.1
+  gamma.enforce_equal bg.2
 
 /-- Soundness: whatever assignment satisfies `enforce`, `(β, γ)` are the native
 `(β, γ)` of the in-circuit statement under `α`. `β` and `γ` must be variables

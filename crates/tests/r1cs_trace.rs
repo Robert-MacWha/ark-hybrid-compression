@@ -1,13 +1,6 @@
 //! Differential test of the Lean model in `lean/` against arkworks.
 //!
-//! `lean/Traces.lean` renders the constraint system of `exampleTrace` (witness
-//! a statement, then compress it) over `𝔽₁₇`, with a toy "sum" hash for both
-//! `alpha` and `beta`, into `target/traces`. This test builds the same circuit
-//! with arkworks, renders
-//! its matrices and honest assignment the same way, and checks they match. Any
-//! divergence between the model's `FpVar` semantics and `ark-r1cs-std` shows up
-//! here as a different trace. Needs the traces rendered first, so it is ignored
-//! by default: `just verify`.
+//! Requires the rendered trace from `lean/Traces.lean` before being run.
 
 use std::borrow::Borrow;
 
