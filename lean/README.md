@@ -43,7 +43,7 @@ Together: a proof for a statement `s' ≠ s` verifies only if the seed `α + β`
 The proofs are about the Lean model, not the Rust source. Two things keep the gap small:
 
 1. The model follows `ark-r1cs-std` method by method (above). Not modelled: setup mode (`value = None`), `OptimizationGoal::Weight` outlining in `finalize()`, and GR1CS predicates other than R1CS. None of these change which assignments satisfy the system.
-2. **Differential testing.** `ArkR1CS.renderTrace` renders the model's constraint matrices and prover assignment in the canonical form of `ConstraintSystem::to_matrices()`. `crates/tests/r1cs_trace.rs` runs `Traces.lean` to get the model's trace of `exampleCircuit` over `𝔽₁₇`, builds the same circuit with arkworks, and checks the two match (`cargo test --features test-utils --test r1cs_trace -- --ignored`, with `lake` on the `PATH`). Any semantic drift between the model and `ark-r1cs-std` fails it. The rendering and the Lean runner come from the `ark-r1cs-trace` crate of lean-ark-r1cs.
+2. **Differential testing.** `ArkR1CS.renderTrace` renders the model's constraint matrices and prover assignment in the canonical form of `ConstraintSystem::to_matrices()`. `Traces.lean` renders the model's trace of `exampleCircuit` over `𝔽₁₇`, and `crates/tests/r1cs_trace.rs` builds the same circuit with arkworks and checks the two match (`just verify` does both). Any semantic drift between the model and `ark-r1cs-std` fails it. The rendering comes from the `ark-r1cs-trace` crate of lean-ark-r1cs.
 
 ## Adding a verified gadget
 

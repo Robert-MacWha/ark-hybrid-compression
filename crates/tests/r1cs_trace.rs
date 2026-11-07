@@ -1,12 +1,12 @@
 //! Differential test of the Lean model in `formal/` against arkworks.
 //!
 //! `lean/Traces.lean` renders the constraint system of `exampleCircuit` over
-//! `𝔽₁₇`, with a toy "sum" hash for both `alpha` and `beta`. This test runs it,
-//! builds the same circuit with arkworks, renders its matrices and honest
-//! assignment the same way, and checks they match. Any divergence between the
-//! model's `FpVar` semantics and `ark-r1cs-std` shows up here as a different
-//! trace. Needs `lake` on the `PATH` and the Lean project built, so it is
-//! ignored by default: `cargo test --features test-utils --test r1cs_trace -- --ignored`.
+//! `𝔽₁₇`, with a toy "sum" hash for both `alpha` and `beta`, into
+//! `target/traces`. This test builds the same circuit with arkworks, renders
+//! its matrices and honest assignment the same way, and checks they match. Any
+//! divergence between the model's `FpVar` semantics and `ark-r1cs-std` shows up
+//! here as a different trace. Needs the traces rendered first, so it is ignored
+//! by default: `just verify`.
 
 use std::borrow::Borrow;
 
@@ -17,7 +17,7 @@ use ark_r1cs_std::{
     eq::EqGadget,
     fields::{FieldVar, fp::FpVar},
 };
-use ark_r1cs_trace::{F17, lean_traces, render_trace};
+use ark_r1cs_trace::{F17, read_traces, render_trace};
 use ark_relations::gr1cs::{
     ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, OptimizationGoal, SynthesisError,
 };
@@ -95,12 +95,10 @@ impl ConstraintSynthesizer<F17> for SumCircuit {
 }
 
 #[test]
-#[ignore = "needs `lake` on the PATH and the Lean project built; run with `--ignored`"]
+#[ignore = "needs the traces rendered by `lean/Traces.lean`; run `just verify`"]
 fn trace_matches_lean_model() {
-    let expected = lean_traces(
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../lean"),
-        "Traces.lean",
-    );
+    let expected = read_traces(concat!(env!("CARGO_MANIFEST_DIR"), "/target/traces"))
+        .expect("traces written by `lake env lean --run Traces.lean` (see `just verify`)");
 
     let circuit = SumCircuit {
         a: F17::from(1u64),
@@ -114,7 +112,7 @@ fn trace_matches_lean_model() {
     assert!(cs.is_satisfied().unwrap());
 
     assert_eq!(
-        render_trace(&cs),
+        render_trace(&cs).unwrap(),
         expected["example"],
         "arkworks trace differs from the Lean model"
     );

@@ -12,6 +12,8 @@ test:
 # against arkworks (see lean/README.md).
 verify:
     cd lean && lake exe cache get && lake build
+    mkdir -p crates/target/traces
+    cd lean && lake env lean --run Traces.lean ../crates/target/traces
     cd crates && cargo test --features test-utils --test r1cs_trace -- --ignored
 
 release: check test

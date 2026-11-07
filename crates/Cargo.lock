@@ -1024,7 +1024,7 @@ dependencies = [
 [[package]]
 name = "ark-r1cs-trace"
 version = "0.1.0"
-source = "git+https://github.com/Robert-MacWha/lean-ark-r1cs?rev=b58adf04c6466c3a0cbb7a8c58ee24c2d499812d#b58adf04c6466c3a0cbb7a8c58ee24c2d499812d"
+source = "git+https://github.com/Robert-MacWha/lean-ark-r1cs?rev=a264538f0a6b065aff9f3dd0045df4c2e706170c#a264538f0a6b065aff9f3dd0045df4c2e706170c"
 dependencies = [
  "ark-ff 0.6.0",
  "ark-relations",

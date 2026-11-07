@@ -47,4 +47,6 @@ jobs:
     - uses: Swatinem/rust-cache@v2
       with:
         workspaces: "crates"
+    - run: mkdir -p crates/target/traces
+    - run: cd lean && lake env lean --run Traces.lean ../crates/target/traces
     - run: cd crates && cargo test --features test-utils --test r1cs_trace -- --ignored

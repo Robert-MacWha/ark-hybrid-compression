@@ -26,7 +26,7 @@ thiserror = "2"
 
 [dev-dependencies]
 alloy = { version = "2.4.1", features = ["node-bindings"] }
-ark-r1cs-trace = { git = "https://github.com/Robert-MacWha/lean-ark-r1cs", rev = "b58adf04c6466c3a0cbb7a8c58ee24c2d499812d" }
+ark-r1cs-trace = { git = "https://github.com/Robert-MacWha/lean-ark-r1cs", rev = "a264538f0a6b065aff9f3dd0045df4c2e706170c" }
 ark-ed-on-bn254 = "0.6.0"
 ruint = { version = "1.20.1", features = ["ark-ff-06"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
