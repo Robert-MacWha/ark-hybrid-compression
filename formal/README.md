@@ -30,7 +30,7 @@ Every constraint-emitting operation has a soundness lemma stated for an *arbitra
 
 With `H` any `CRHSchemeGadget`, `Hα` any native function, `stmt` any list of statement variables (produced by an arbitrary circuit), and `s` the in-circuit statement (`stmt` evaluated under the assignment):
 
-* `compressStatement_sound` (`HybridCompression/Circuit.lean`): every assignment satisfying the README's compression pattern (allocate `α`, run the prover gadget, expose `β` and `γ`) has public inputs `(α, β, γ)` with `(β, γ) = prover H α s`, i.e. `β = H(s)` and `γ = uhf (α + β) s`. The circuit that produced `stmt` contributes its own relation on `s`; `exampleCircuit_sound` shows the two composing.
+* `compressStatement_sound` (`HybridCompression/Circuit.lean`): every assignment satisfying the README's compression pattern (allocate `(α, β, γ)` from the native `compress`, then `constraints::enforce`) has public inputs `(α, β, γ)` with `(β, γ) = prover H α s`, i.e. `β = H(s)` and `γ = uhf (α + β) s`. The circuit that produced `stmt` contributes its own relation on `s`; `exampleCircuit_sound` shows the two composing.
 * `binding` (`HybridCompression/Security.lean`): if the verifier accepts `(β, s')`, i.e. the circuit is satisfied with the public inputs `verifier Hα β s'`, then either `s = s'` or `Hα s' + β` is a root of the non-zero polynomial `uhfPoly s - uhfPoly s'`.
 * `uhf_collision_shift_card_le`: for fixed `s ≠ s'` of length `n` and fixed `t`, at most `n - 1` values `x ∈ F` satisfy `uhf (x + t) s = uhf (x + t) s'`. With `t = β` this bounds the bad values of `α = Hα(s')`; with `t = α` the bad values of `β = Hβ(s)`.
 

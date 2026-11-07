@@ -55,4 +55,34 @@ theorem proverGadget_inputCount (H : CRHSchemeGadget F) (alpha : FpVar F) (stmt 
   simp only [proverGadget, CS.run_bind, CS.run_pure, List.append_nil, Op.inputCount_append,
     H.noInputs, uhfGadget_inputCount]
 
+/-- `hybrid_compression::constraints::enforce`: `(alpha, beta, gamma)` is the
+compression of `stmt`. -/
+def enforceGadget (H : CRHSchemeGadget F) (alpha beta gamma : FpVar F) (stmt : List (FpVar F)) :
+    CS F Unit := do
+  let bg ← proverGadget H alpha stmt
+  EqGadget.enforce_equal beta bg.1
+  EqGadget.enforce_equal gamma bg.2
+
+/-- Soundness: whatever assignment satisfies `enforce`, `(β, γ)` are the native
+`(β, γ)` of the in-circuit statement under `α`. `β` and `γ` must be variables
+(`enforce_equal` on two constants emits nothing). -/
+theorem enforceGadget_sound (H : CRHSchemeGadget F) (alpha beta gamma : FpVar F)
+    (stmt : List (FpVar F)) (k : Counters) (a : Assignment F)
+    (hβ : ¬ beta.isConstant) (hγ : ¬ gamma.isConstant)
+    (h : ConstraintsHold a ((enforceGadget H alpha beta gamma stmt).run k).2) :
+    (beta.eval a, gamma.eval a) =
+      proverNative H.evaluate_native (alpha.eval a) (stmt.map (·.eval a)) := by
+  simp only [enforceGadget, CS.run_bind, constraintsHold_append] at h
+  obtain ⟨h₁, h₂, h₃⟩ := h
+  have hp := proverGadget_sound H alpha stmt k a h₁
+  rw [FpVar.enforce_equal_sound _ _ (fun hc => hβ hc.1) _ a h₂,
+    FpVar.enforce_equal_sound _ _ (fun hc => hγ hc.1) _ a h₃]
+  exact hp
+
+theorem enforceGadget_inputCount (H : CRHSchemeGadget F) (alpha beta gamma : FpVar F)
+    (stmt : List (FpVar F)) (k : Counters) :
+    Op.inputCount ((enforceGadget H alpha beta gamma stmt).run k).2 = 0 := by
+  simp only [enforceGadget, CS.run_bind, Op.inputCount_append, proverGadget_inputCount,
+    FpVar.enforce_equal_inputCount]
+
 end HybridCompression

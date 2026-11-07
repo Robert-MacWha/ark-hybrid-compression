@@ -12,12 +12,11 @@ use std::{borrow::Borrow, collections::BTreeMap, fmt::Write};
 
 use ark_crypto_primitives::crh::{CRHScheme, constraints::CRHSchemeGadget};
 use ark_ff::{Fp64, MontBackend, MontConfig, PrimeField, Zero};
-use ark_hybrid_compression::hybrid_compression;
+use ark_hybrid_compression::hybrid_compression::{self, compress};
 use ark_r1cs_std::{
     alloc::AllocVar,
     eq::EqGadget,
     fields::{FieldVar, fp::FpVar},
-    prelude::GR1CSVar,
 };
 use ark_relations::gr1cs::{
     ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, OptimizationGoal,
@@ -86,20 +85,20 @@ impl ConstraintSynthesizer<F17> for SumCircuit {
         let c = FpVar::new_witness(cs.clone(), || Ok(self.c))?;
         let sum = FpVar::new_witness(cs.clone(), || Ok(self.sum))?;
         (&a + &b + &c).enforce_equal(&sum)?;
-        let stmt = [a, b, c, sum];
 
-        let alpha = FpVar::new_input(cs.clone(), || {
-            let stmt: Vec<F17> = stmt.iter().map(|x| x.value()).collect::<Result<_, _>>()?;
-            SumCRH::evaluate(&(), stmt).map_err(|_| SynthesisError::Unsatisfiable)
-        })?;
-        let (beta, gamma) = hybrid_compression::constraints::prover::<SumCRH, F17, SumCRHGadget>(
+        let public_inputs =
+            compress::<SumCRH, SumCRH, F17>(&(), &(), &[self.a, self.b, self.c, self.sum])
+                .map_err(|_| SynthesisError::Unsatisfiable)?;
+        let alpha = FpVar::new_input(cs.clone(), || Ok(public_inputs.0))?;
+        let beta = FpVar::new_input(cs.clone(), || Ok(public_inputs.1))?;
+        let gamma = FpVar::new_input(cs, || Ok(public_inputs.2))?;
+        hybrid_compression::constraints::enforce::<SumCRH, F17, SumCRHGadget>(
             &(),
-            alpha,
-            &stmt,
-        )?;
-        FpVar::new_input(cs.clone(), || beta.value())?.enforce_equal(&beta)?;
-        FpVar::new_input(cs, || gamma.value())?.enforce_equal(&gamma)?;
-        Ok(())
+            &alpha,
+            &beta,
+            &gamma,
+            &[a, b, c, sum],
+        )
     }
 }
 
