@@ -20,59 +20,33 @@ use ark_crypto_primitives::{
 use ark_ed_on_bn254::Fr;
 use ark_ff::PrimeField;
 use ark_hybrid_compression::{KeccakCRH, hybrid_compression};
-use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::{FieldVar, fp::FpVar}};
-use ark_relations::gr1cs::{
-    ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError,
-};
+use ark_r1cs_std::{alloc::AllocVar, fields::fp::FpVar};
+use ark_relations::gr1cs::ConstraintSystem;
 
-/// Toy circuit that claims `total` is the sum of eight values, with the
-/// statement `[values.., total]` compressed into `(alpha, beta, gamma)`.
-struct SumCircuit {
-    values: [Fr; 8],
-    total: Fr,
-    public_inputs: (Fr, Fr, Fr),
-    beta_params: PoseidonConfig<Fr>,
-}
-
-impl ConstraintSynthesizer<Fr> for SumCircuit {
-    fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
-        let values: Vec<FpVar<Fr>> = self
-            .values
-            .iter()
-            .map(|v| FpVar::new_witness(cs.clone(), || Ok(*v)))
-            .collect::<Result<_, _>>()?;
-        let total = FpVar::new_witness(cs.clone(), || Ok(self.total))?;
-        values.iter().fold(FpVar::zero(), |acc, v| acc + v).enforce_equal(&total)?;
-
-        let alpha = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.0))?;
-        let beta = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.1))?;
-        let gamma = FpVar::new_input(cs.clone(), || Ok(self.public_inputs.2))?;
-        let params = CRHParametersVar::new_constant(cs, &self.beta_params)?;
-        let mut stmt = values;
-        stmt.push(total);
-        hybrid_compression::enforce::<CRH<Fr>, Fr, CRHGadget<Fr>>(&params, &alpha, &beta, &gamma, &stmt)
-    }
-}
-
-let values: [Fr; 8] = core::array::from_fn(|i| Fr::from(i as u64));
-let total = Fr::from(28u64);
+let stmt: Vec<Fr> = (0..9).map(Fr::from).collect();
 let (ark, mds) = find_poseidon_ark_and_mds::<Fr>(Fr::MODULUS_BIT_SIZE as u64, 2, 8, 24, 0);
 let beta_params = PoseidonConfig::new(8, 24, 31, mds, ark, 2, 1);
 
 // Compress the 9 statement elements into 3 public inputs, with keccak256 for
 // `alpha` (matching the Solidity verifier) and Poseidon for `beta`.
-let mut stmt = values.to_vec();
-stmt.push(total);
-let public_inputs =
+let (alpha, beta, gamma) =
     hybrid_compression::compress::<KeccakCRH<Fr>, CRH<Fr>, Fr>(&(), &beta_params, &stmt).unwrap();
 
 let cs = ConstraintSystem::<Fr>::new_ref();
-SumCircuit { values, total, public_inputs, beta_params }.generate_constraints(cs.clone()).unwrap();
+// The statement variables, as witnessed (or computed) by the rest of the circuit.
+let stmt_var = Vec::<FpVar<Fr>>::new_witness(cs.clone(), || Ok(stmt)).unwrap();
+
+let alpha_var = FpVar::new_input(cs.clone(), || Ok(alpha)).unwrap();
+let beta_var = FpVar::new_input(cs.clone(), || Ok(beta)).unwrap();
+let gamma_var = FpVar::new_input(cs.clone(), || Ok(gamma)).unwrap();
+let params = CRHParametersVar::new_constant(cs.clone(), &beta_params).unwrap();
+hybrid_compression::enforce::<CRH<Fr>, Fr, CRHGadget<Fr>>(
+    &params, &alpha_var, &beta_var, &gamma_var, &stmt_var,
+)
+.unwrap();
+
 assert!(cs.is_satisfied().unwrap());
-assert_eq!(
-    cs.instance_assignment().unwrap(),
-    vec![Fr::from(1u64), public_inputs.0, public_inputs.1, public_inputs.2],
-);
+assert_eq!(cs.instance_assignment().unwrap(), vec![Fr::from(1u64), alpha, beta, gamma]);
 ```
 
 ### Verifying a compressed statement in Rust
@@ -102,7 +76,7 @@ NOTE: `LibHybridCompression` assumes that `keccak256` was used to compress the s
 ```solidity
 import {LibHybridCompression} from "path/to/LibHybridCompression.sol";
 
-contract SumVerifier {
+contract Verifier {
     // Arbitrary prime field modulus for the zk proof system.
     uint256 public constant FIELD = 255;
 
