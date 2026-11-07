@@ -2,9 +2,7 @@
 
 Lean 4 / Mathlib proofs that the hybrid compression binds the in-circuit statement to the values the verifier recomputes out of circuit, for **any** black-box hash gadget and **any** inner circuit. Only *soundness* is proved (no satisfying assignment can exist with mismatched values); completeness (the honest prover can always produce one) is covered by the crate's tests.
 
-The `ark-r1cs/` package is the reusable model of `ark-relations` / `ark-r1cs-std`, laid out module for module after the crates; `HybridCompression/` mirrors this crate's modules (`Uhf`, `HybridCompression`), plus `Circuit` for the compression pattern of the README, `Security` for the binding theorem and `Examples` for the trace checks.
-
-`ark-r1cs/` is a self-contained Lake package (required by path) so it can move to its own repository and be shared across circuit verifications.
+The model of `ark-relations` / `ark-r1cs-std` lives in [lean-ark-r1cs](https://github.com/Robert-MacWha/lean-ark-r1cs) and is pulled in as the `ark-r1cs` dependency; `HybridCompression/` mirrors this crate's modules (`Uhf`, `HybridCompression`), plus `Circuit` for the compression pattern of the README, `Security` for the binding theorem and `Examples` for the trace checks.
 
 ## Building
 
@@ -18,7 +16,7 @@ or `just verify` from the repository root. CI runs the same via `leanprover/lean
 
 ## How the model follows arkworks
 
-`ark-r1cs/` is written method by method against `ark-relations` 0.6 and `ark-r1cs-std` 0.6, with the Rust names kept:
+The model is written method by method against `ark-relations` 0.6 and `ark-r1cs-std` 0.6, with the Rust names kept:
 
 * `Variable::{Zero, One, Instance(i), Witness(i)}`; `One` is instance variable 0, so `ConstraintSystem::new()` starts at `num_instance_variables = 1`. `SymbolicLc` is not modelled: `new_lc` returns the linear combination itself, i.e. the form `finalize()` inlines to.
 * A gadget is a `CS F α`: given the counters of the constraint system, its output and the list of operations it performs (`new_input_variable`, `new_witness_variable`, `enforce_r1cs_constraint`). `do` notation threads the counters like a `ConstraintSystemRef`.
