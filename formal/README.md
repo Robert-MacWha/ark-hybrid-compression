@@ -6,29 +6,15 @@ black-box hash gadget and **any** inner circuit. Only *soundness* is proved
 (no satisfying assignment can exist with mismatched values); completeness
 (the honest prover can always produce one) is covered by the crate's tests.
 
-```
-formal/
-├── ark-r1cs/                      reusable model of ark-relations / ark-r1cs-std
-│   └── ArkR1CS/
-│       ├── Relations/Variable.lean           Variable, LinearCombination
-│       ├── Relations/ConstraintSystem.lean   ops, the CS monad, ConstraintsHold
-│       ├── R1csStd/Boolean.lean              Boolean (constants, lc(), not)
-│       ├── R1csStd/Eq.lean                   EqGadget + default enforce_equal
-│       ├── R1csStd/Fields/Fp.lean            AllocatedFp, FpVar, impl_ops!, EqGadget impl
-│       ├── CryptoPrimitives/Crh.lean         black-box CRHScheme + gadget interface
-│       └── Trace.lean                        canonical traces for differential tests
-├── HybridCompression/             the crate, module for module
-│   ├── Uhf.lean                   src/uhf
-│   ├── HybridCompression.lean     src/hybrid_compression
-│   ├── Circuit.lean               src/circuit.rs (enforce_compression)
-│   ├── Security.lean              binding theorem, (n-1)/|F| collision bound
-│   └── Examples.lean              src/test_utils, trace and is_satisfied checks
-└── traces/example.trace           shared with crates/tests/r1cs_trace.rs
-```
+The `ark-r1cs/` package is the reusable model of `ark-relations` /
+`ark-r1cs-std`, laid out module for module after the crates;
+`HybridCompression/` mirrors this crate's modules (`Uhf`, `HybridCompression`,
+`Circuit`, plus `Security` for the binding theorem and `Examples` for the
+trace checks).
 
-`ark-r1cs/` is a self-contained Lake package (required by path from
-`formal/`) so it can move to its own repository and be shared across circuit
-verifications.
+
+`ark-r1cs/` is a self-contained Lake package (required by path) so it can
+move to its own repository and be shared across circuit verifications.
 
 ## Building
 
