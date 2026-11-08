@@ -29,7 +29,7 @@ open ArkR1CS Polynomial
 
 variable {F : Type} [Field F]
 
-/-- `uhfPoly [x₀, …, xₙ₋₁] = ∑ xᵢ Xⁱ`, so that `uhf σ s = (uhfPoly s).eval σ`. -/
+/-- The polynomial `∑ xᵢ Xⁱ`, whose value at `σ` is `uhf σ x`. -/
 noncomputable def uhfPoly : List F → F[X]
   | [] => 0
   | x :: xs => C x + X * uhfPoly xs
@@ -64,8 +64,8 @@ theorem uhfPoly_injective_of_length {s s' : List F} (hlen : s'.length = s.length
     List.getElem?_eq_getElem hn', Option.getD_some] at this
   exact this
 
-/-- If two distinct statements of the same length collide under the UHF at
-`σ`, then `σ` is a root of their (non-zero) difference polynomial. -/
+/-- A seed at which two distinct statements of the same length collide is a root
+of their difference polynomial. -/
 theorem uhf_collision_mem_roots {s s' : List F} (hlen : s'.length = s.length) (hne : s ≠ s')
     {σ : F} (h : uhf σ s = uhf σ s') : σ ∈ (uhfPoly s - uhfPoly s').roots := by
   rw [mem_roots]
@@ -73,8 +73,7 @@ theorem uhf_collision_mem_roots {s s' : List F} (hlen : s'.length = s.length) (h
   · intro hzero
     exact hne (uhfPoly_injective_of_length hlen (sub_eq_zero.mp hzero))
 
-/-- `uhf` is an `(n - 1)/|F|`-universal hash family: two distinct statements of
-length `n` collide at fewer than `n` seeds. -/
+/-- Two distinct statements of length `n` collide at no more than `n - 1` seeds. -/
 theorem uhf_collision_card_le [Fintype F] [DecidableEq F] {s s' : List F}
     (hlen : s'.length = s.length) (hne : s ≠ s') :
     (Finset.univ.filter fun σ : F => uhf σ s = uhf σ s').card ≤ s.length - 1 := by
@@ -92,10 +91,8 @@ theorem uhf_collision_card_le [Fintype F] [DecidableEq F] {s s' : List F}
         rw [← hlen]
         exact natDegree_uhfPoly_le s'
 
-/-- The same bound for seeds of the form `x + t` with `t` fixed: at most `n - 1`
-values of `x` make distinct statements collide. With `t = β` this bounds the
-number of "bad" values of `α = Hα(s')`; with `t = α` the number of bad
-`β = Hβ(s)`. -/
+/-- Two distinct statements of length `n` collide at no more than `n - 1` seeds
+of the form `x + t` for a fixed `t`. -/
 theorem uhf_collision_shift_card_le [Fintype F] [DecidableEq F] {s s' : List F}
     (hlen : s'.length = s.length) (hne : s ≠ s') (t : F) :
     (Finset.univ.filter fun x : F => uhf (x + t) s = uhf (x + t) s').card ≤ s.length - 1 := by
@@ -107,10 +104,8 @@ theorem uhf_collision_shift_card_le [Fintype F] [DecidableEq F] {s s' : List F}
   · intro x _ y _ hxy
     exact add_right_cancel hxy
 
-/-- **Binding.** If the verifier accepts `(β, s')`, i.e. some assignment
-satisfies the compression pattern with public inputs `(Hα s', β, uhf (β + Hα s') s')`,
-then the in-circuit statement `s` either equals `s'` or `σ = Hα s' + β` is a
-root of the difference polynomial (one of at most `n - 1` values). -/
+/-- If the verifier accepts `(beta, s')`, the statement in the circuit is `s'` or
+`Hα s' + beta` is a root of their difference polynomial. -/
 theorem binding [DecidableEq F] (H : CRHSchemeGadget F) (Hα : List F → F)
     (stmt : List (FpVar F)) (k : Counters) (a : Assignment F) (β : F) (s' : List F)
     (hacc : ConstraintsHold a ((compressStatement H Hα stmt).run k).2)

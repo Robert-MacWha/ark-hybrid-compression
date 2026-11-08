@@ -18,8 +18,7 @@ open ArkR1CS
 
 variable {F : Type} [Field F] [DecidableEq F]
 
-/-- A toy hash gadget: the sum of the inputs, `x₀ + (x₁ + (… + 0))`. It emits
-no constraints. -/
+/-- A toy hash gadget: the sum of the inputs. -/
 def sumGadget : List (FpVar F) → CS F (FpVar F)
   | [] => pure FpVar.zero
   | x :: xs => do
@@ -37,15 +36,15 @@ theorem sumGadget_ops (xs : List (FpVar F)) (k : Counters) : ((sumGadget xs).run
   | nil => simp [sumGadget]
   | cons x xs ih => simp [sumGadget, ih]
 
-/-- The toy hash as a black-box `CRHSchemeGadget`. -/
+/-- The sum as a `CRHSchemeGadget`. -/
 def sumCRH : CRHSchemeGadget F where
   evaluate_native := List.sum
   evaluate := sumGadget
   sound xs k a _ := sumGadget_sound xs k a
   noInputs xs k := by simp [sumGadget_ops, Op.inputCount]
 
-/-- Operations of the compression pattern from a fresh constraint system:
-witness each value of `stmt`, then `compressStatement` with the toy hash. -/
+/-- Witnesses `stmt` and runs `compressStatement` with the toy hash, from a fresh
+constraint system. -/
 def exampleTrace (stmt : List F) (Hα : List F → F) : List (Op F) :=
   ((do
     let vars ← stmt.mapM FpVar.new_witness
@@ -53,9 +52,8 @@ def exampleTrace (stmt : List F) (Hα : List F → F) : List (Op F) :=
 
 instance : Fact (Nat.Prime 17) := ⟨by norm_num⟩
 
-/-- The canonical trace over `𝔽₁₇` with statement `[1, 2, 3, 6]` and both hashes
-equal to the sum of the inputs. `crates/tests/r1cs_trace.rs` builds the same
-circuit with arkworks and checks it against this. -/
+/-- The trace of `exampleTrace` over `ZMod 17` with statement `[1, 2, 3, 6]`,
+checked against arkworks by `crates/tests/r1cs_trace.rs`. -/
 def exampleTraceString : String :=
   renderTrace (fun x : ZMod 17 => toString x.val) (exampleTrace (F := ZMod 17) [1, 2, 3, 6] List.sum)
 
