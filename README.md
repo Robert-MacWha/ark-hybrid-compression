@@ -13,17 +13,17 @@ See [khovratovich/two-worlds-ref](https://github.com/khovratovich/two-worlds-ref
 Computes the public inputs `(alpha, beta, gamma)` from the statement with `hybrid_compression::compress` and enforces the compression with `hybrid_compression::enforce`.
 
 ```rust
-use ark_crypto_primitives::{
-    crh::poseidon::{CRH, constraints::{CRHGadget, CRHParametersVar}},
-    sponge::poseidon::{PoseidonConfig, find_poseidon_ark_and_mds},
-};
-use ark_ed_on_bn254::Fr;
-use ark_ff::PrimeField;
+# use ark_crypto_primitives::{
+#     crh::poseidon::{CRH, constraints::{CRHGadget, CRHParametersVar}},
+#     sponge::poseidon::{PoseidonConfig, find_poseidon_ark_and_mds},
+# };
+# use ark_ed_on_bn254::Fr;
+# use ark_ff::PrimeField;
+# use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::{FieldVar, fp::FpVar}};
+# use ark_relations::gr1cs::{
+#     ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError,
+# };
 use ark_hybrid_compression::{KeccakCRH, hybrid_compression};
-use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::{FieldVar, fp::FpVar}};
-use ark_relations::gr1cs::{
-    ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError,
-};
 
 /// Toy circuit that claims `total` is the sum of eight values, with the
 /// statement `[values.., total]` compressed into `(alpha, beta, gamma)`.
@@ -56,8 +56,8 @@ impl ConstraintSynthesizer<Fr> for SumCircuit {
 
 let values: [Fr; 8] = core::array::from_fn(|i| Fr::from(i as u64));
 let total = Fr::from(28u64);
-let (ark, mds) = find_poseidon_ark_and_mds::<Fr>(Fr::MODULUS_BIT_SIZE as u64, 2, 8, 24, 0);
-let beta_params = PoseidonConfig::new(8, 24, 31, mds, ark, 2, 1);
+# let (ark, mds) = find_poseidon_ark_and_mds::<Fr>(Fr::MODULUS_BIT_SIZE as u64, 2, 8, 24, 0);
+# let beta_params = PoseidonConfig::new(8, 24, 31, mds, ark, 2, 1);
 
 // Compress the 9 statement elements into 3 public inputs, with keccak256 for
 // `alpha` (matching the Solidity verifier) and Poseidon for `beta`.
@@ -77,10 +77,10 @@ assert_eq!(
 
 ### Verifying a compressed statement in Rust
 
-A verifier holding (`beta`, `stmt`) can recover the compressed public inputs (`alpha`, `beta`, `gamma`) and use that to verify the zk proof. 
+A verifier holding `beta` and the statement recovers the public inputs with `hybrid_compression::verifier` and checks the zk proof against them.
 
 ```rust
-use ark_ed_on_bn254::Fr;
+# use ark_ed_on_bn254::Fr;
 use ark_hybrid_compression::{KeccakCRH, hybrid_compression};
 
 let beta = Fr::from(12345u64);
@@ -95,19 +95,18 @@ let public_inputs = [alpha, beta, gamma];
 
 ### Verifying a compressed statement in Solidity
 
-A solidity verifier contract can use `LibHybridCompression.verifier` to recover the compressed public inputs (`alpha`, `beta`, `gamma`).
-
-NOTE: `LibHybridCompression` assumes that `keccak256` was used to compress the statement.
+A Solidity verifier contract recovers the public inputs with `LibHybridCompression.verifier`. The library assumes `keccak256` was used for `alpha`.
 
 ```solidity
 import {LibHybridCompression} from "path/to/LibHybridCompression.sol";
 
 contract SumVerifier {
-    // Arbitrary prime field modulus for the zk proof system.
-    uint256 public constant FIELD = 255;
+    // The scalar field of the zk proof system, here BN254.
+    uint256 public constant FIELD =
+        21888242871839275222246405745257275088548364400416034343698204186575808495617;
 
-    function submit(uint256[] stmt, uint256 beta, bytes proof) external view {
-        (uint256 alpha, uint256 gamma) = LibHybridCompression.verifier(beta, stmt, field);
+    function submit(uint256[] calldata stmt, uint256 beta, bytes calldata proof) external view {
+        (uint256 alpha, uint256 gamma) = LibHybridCompression.verifier(beta, stmt, FIELD);
 
         uint256[] memory publicInputs = new uint256[](3);
         publicInputs[0] = alpha;
@@ -119,12 +118,8 @@ contract SumVerifier {
 }
 ```
 
-A working version is at `contracts/src/examples/HybridCompressionExample.sol`, exercised
-end-to-end against the Rust prover by `crates/tests/circuit_integration.rs`.
+See [`HybridCompressionExample.sol`](contracts/src/examples/HybridCompressionExample.sol) for a working contract. [`circuit_integration.rs`](crates/tests/circuit_integration.rs) exercises it against the Rust prover.
 
 ## Formal verification
 
-`lean/` contains a Lean 4 model of the circuit with machine-checked proofs
-that, for any black-box hash gadget and any inner circuit, the public inputs
-`(alpha, beta, gamma)` bind the in-circuit statement to the one the verifier
-recomputes. See [`lean/README.md`](lean/README.md).
+`lean/` contains a Lean 4 model of the circuit with proofs that the public inputs `(alpha, beta, gamma)` bind the statement in the circuit to the one the verifier recomputes. See [`lean/README.md`](lean/README.md).
