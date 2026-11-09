@@ -8,6 +8,14 @@ test:
     cd contracts && forge test
     cd crates && cargo test --all-targets --all-features
 
+# Build the Lean formal model and proofs and run the differential trace test
+# against arkworks (see lean/README.md).
+verify:
+    cd lean && lake exe cache get && lake build
+    mkdir -p crates/target/traces
+    cd lean && lake env lean --run Traces.lean ../crates/target/traces
+    cd crates && cargo test --features test-utils --test r1cs_trace -- --ignored
+
 release: check test
     cd crates && cargo package --list --allow-dirty
     cd crates && cargo publish --dry-run --allow-dirty

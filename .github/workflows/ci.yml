@@ -34,3 +34,19 @@ jobs:
     - run: nix develop .#ci --command bash -c "cd crates && cargo clippy --all-targets --all-features -- -D warnings"
     - run: nix develop .#ci --command bash -c "cd crates && cargo test --all-targets --all-features"
     - run: nix develop .#ci --command bash -c "cd crates && cargo test --doc --all-features"
+
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: leanprover/lean-action@v1
+      with:
+        lake-package-directory: lean
+        use-mathlib-cache: true
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: "crates"
+    - run: mkdir -p crates/target/traces
+    - run: cd lean && lake env lean --run Traces.lean ../crates/target/traces
+    - run: cd crates && cargo test --features test-utils --test r1cs_trace -- --ignored
