@@ -18,18 +18,16 @@ open ArkR1CS
 
 variable {F : Type} [Field F] [DecidableEq F]
 
-/-- A toy hash for the trace check: the UHF at a fixed public seed,
-`uhf seed xs`. Its gadget multiplies only by the constant seed, so it emits no
-constraints. -/
+/-- A toy hash: the UHF at a fixed seed, `uhf seed`. The gadget multiplies
+only by the constant seed, so it emits no constraints. -/
 def uhfCRH (seed : F) : CRHSchemeGadget F where
   evaluate_native := uhf seed
   evaluate := uhfGadget (FpVar.constant seed)
   sound xs k a h := by simpa [FpVar.constant] using uhfGadget_sound _ xs k a h
   noInputs xs k := uhfGadget_inputCount _ xs k
 
-/-- Operations of the compression pattern from a fresh constraint system:
-witness each value of `stmt`, then `compressStatement` with `uhfCRH 2` for
-both `alpha` and `beta`. -/
+/-- Witnesses `stmt` and runs `compressStatement` with `uhfCRH 2` for both
+`alpha` and `beta`, from a fresh constraint system. -/
 def exampleTrace (stmt : List F) : List (Op F) :=
   ((do
     let vars ← stmt.mapM FpVar.new_witness
@@ -37,9 +35,8 @@ def exampleTrace (stmt : List F) : List (Op F) :=
 
 instance : Fact (Nat.Prime 17) := ⟨by norm_num⟩
 
-/-- The canonical trace over `𝔽₁₇` with statement `[1, 2, 3, 4]` and both hashes
-equal to `uhf 2`. `crates/tests/r1cs_trace.rs` builds the same
-circuit with arkworks and checks it against this. -/
+/-- The trace of `exampleTrace` over `ZMod 17` with statement `[1, 2, 3, 4]`,
+checked against arkworks by `crates/tests/r1cs_trace.rs`. -/
 def exampleTraceString : String :=
   renderTrace (fun x : ZMod 17 => toString x.val) (exampleTrace (F := ZMod 17) [1, 2, 3, 4])
 

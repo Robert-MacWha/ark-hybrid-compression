@@ -21,8 +21,8 @@ open ArkR1CS
 
 variable {F : Type} [Field F] [DecidableEq F]
 
-/-- The compression pattern: allocate `(α, β, γ)` from the native `compress`,
-then `enforce`. -/
+/-- Allocates `(alpha, beta, gamma)` from `compress` as public inputs and calls
+`enforce`, as in the README example. -/
 def compressStatement (H : CRHSchemeGadget F) (Hα : List F → F) (stmt : List (FpVar F)) :
     CS F Unit := do
   let raw := stmt.map FpVar.value
@@ -32,8 +32,7 @@ def compressStatement (H : CRHSchemeGadget F) (Hα : List F → F) (stmt : List 
   let gamma ← FpVar.new_input pub.2
   enforceGadget H alpha beta gamma stmt
 
-/-- **Soundness.** Any assignment satisfying the compression pattern has public
-inputs `(α, β, γ)` with `(β, γ) = prover H α s`, where `s` is the in-circuit
+/-- The public inputs `(beta, gamma)` are `prover` of `alpha` and the evaluated
 statement. -/
 theorem compressStatement_sound (H : CRHSchemeGadget F) (Hα : List F → F)
     (stmt : List (FpVar F)) (k : Counters) (a : Assignment F)

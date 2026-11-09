@@ -16,29 +16,28 @@ open ArkR1CS
 
 variable {F : Type} [Field F] [DecidableEq F]
 
-/-- `hybrid_compression::hybrid_compression`. -/
+/-- `ark_hybrid_compression::hybrid_compression::hybrid_compression`. -/
 def hybridCompression (H : List F → F) (known : F) (stmt : List F) : F × F :=
   let computed := H stmt
   (computed, uhf (known + computed) stmt)
 
-/-- `hybrid_compression::prover`: `(β, γ)` from `α`. -/
+/-- `ark_hybrid_compression::hybrid_compression::prover`. -/
 def proverNative (Hβ : List F → F) (α : F) (stmt : List F) : F × F :=
   hybridCompression Hβ α stmt
 
-/-- `hybrid_compression::verifier`: `(α, γ)` from `β`. -/
+/-- `ark_hybrid_compression::hybrid_compression::verifier`. -/
 def verifierNative (Hα : List F → F) (β : F) (stmt : List F) : F × F :=
   hybridCompression Hα β stmt
 
-/-- `hybrid_compression::constraints::prover`. -/
+/-- `ark_hybrid_compression::hybrid_compression::constraints::prover`. -/
 def proverGadget (H : CRHSchemeGadget F) (alpha : FpVar F) (stmt : List (FpVar F)) :
     CS F (FpVar F × FpVar F) := do
   let beta ← H.evaluate stmt
-  let sigma := alpha.add beta
+  let sigma := alpha + beta
   let gamma ← uhfGadget sigma stmt
   pure (beta, gamma)
 
-/-- Soundness: whatever assignment satisfies the gadget's constraints, the
-in-circuit `(β, γ)` are the native `(β, γ)` of the in-circuit statement. -/
+/-- The gadget's output is `prover` of the evaluated inputs. -/
 theorem proverGadget_sound (H : CRHSchemeGadget F) (alpha : FpVar F) (stmt : List (FpVar F))
     (k : Counters) (a : Assignment F)
     (h : ConstraintsHold a ((proverGadget H alpha stmt).run k).2) :
@@ -47,24 +46,22 @@ theorem proverGadget_sound (H : CRHSchemeGadget F) (alpha : FpVar F) (stmt : Lis
       proverNative H.evaluate_native (alpha.eval a) (stmt.map (·.eval a)) := by
   simp only [proverGadget, cs_run] at h ⊢
   obtain ⟨h₁, h₂⟩ := h
-  rw [uhfGadget_sound _ _ _ _ h₂, FpVar.eval_add, H.sound _ _ _ h₁]
+  rw [uhfGadget_sound _ _ _ _ h₂, FpVar.eval_hAdd, H.sound _ _ _ h₁]
   rfl
 
 theorem proverGadget_inputCount (H : CRHSchemeGadget F) (alpha : FpVar F) (stmt : List (FpVar F))
     (k : Counters) : Op.inputCount ((proverGadget H alpha stmt).run k).2 = 0 := by
   simp only [proverGadget, cs_run, H.noInputs, uhfGadget_inputCount]
 
-/-- `hybrid_compression::constraints::enforce`: `(alpha, beta, gamma)` is the
-compression of `stmt`. -/
+/-- `ark_hybrid_compression::hybrid_compression::enforce`. -/
 def enforceGadget (H : CRHSchemeGadget F) (alpha beta gamma : FpVar F) (stmt : List (FpVar F)) :
     CS F Unit := do
   let bg ← proverGadget H alpha stmt
-  EqGadget.enforce_equal beta bg.1
-  EqGadget.enforce_equal gamma bg.2
+  beta.enforce_equal bg.1
+  gamma.enforce_equal bg.2
 
-/-- Soundness: whatever assignment satisfies `enforce`, `(β, γ)` are the native
-`(β, γ)` of the in-circuit statement under `α`. `β` and `γ` must be variables
-(`enforce_equal` on two constants emits nothing). -/
+/-- `(beta, gamma)` are `prover` of `alpha` and the evaluated statement. `beta` and
+`gamma` must be variables, since `enforce_equal` on two constants emits nothing. -/
 theorem enforceGadget_sound (H : CRHSchemeGadget F) (alpha beta gamma : FpVar F)
     (stmt : List (FpVar F)) (k : Counters) (a : Assignment F)
     (hβ : ¬ beta.isConstant) (hγ : ¬ gamma.isConstant)
