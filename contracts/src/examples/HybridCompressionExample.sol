@@ -8,9 +8,9 @@ interface IArgVer {
     function verify(uint256[] calldata publicInputs, bytes calldata proof) external view returns (bool);
 }
 
-/// Example hybrid compression contract that wraps performs the on-chain
-/// half of the hybrid compression protocol, checking the values of `alpha`
-/// and `gamma` against a statement `(a, b, c, sum)`.
+/// Example contract performing the on-chain half of the hybrid compression
+/// protocol: recomputes `alpha` and `gamma` from a 4-element statement and
+/// checks the proof against `(alpha, beta, gamma)`.
 contract HybridCompressionExample {
     IArgVer public immutable argVer;
     uint256 public immutable field;
@@ -20,15 +20,15 @@ contract HybridCompressionExample {
         field = _field;
     }
 
-    /// (a, b, c, sum) is the statement for the zk proof.
+    /// `statement` is the statement for the zk proof. Its length is fixed:
+    /// the compression is not length-binding, so it must match the circuit's.
     ///
     /// `beta` and `proof` come from the off-chain prover.
-    function submit(uint256 a, uint256 b, uint256 c, uint256 sum, uint256 beta, bytes calldata proof) external view {
+    function submit(uint256[4] calldata statement, uint256 beta, bytes calldata proof) external view {
         uint256[] memory stmt = new uint256[](4);
-        stmt[0] = a;
-        stmt[1] = b;
-        stmt[2] = c;
-        stmt[3] = sum;
+        for (uint256 i = 0; i < 4; i++) {
+            stmt[i] = statement[i];
+        }
 
         (uint256 alpha, uint256 gamma) = LibHybridCompression.verifier(beta, stmt, field);
 

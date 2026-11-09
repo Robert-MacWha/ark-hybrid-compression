@@ -5,20 +5,25 @@
 use std::borrow::Borrow;
 
 use ark_crypto_primitives::crh::{CRHScheme, constraints::CRHSchemeGadget};
-use ark_hybrid_compression::hybrid_compression::{self, compress};
+use ark_hybrid_compression::{
+    hybrid_compression::{self, compress},
+    test_utils::{uhf, uhf_gadget},
+};
 use ark_r1cs_std::{
     alloc::AllocVar,
     fields::{FieldVar, fp::FpVar},
 };
 use ark_r1cs_trace::{F17, read_traces, render_trace};
-use ark_relations::gr1cs::{
-    ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, OptimizationGoal, SynthesisError,
-};
+use ark_relations::gr1cs::{ConstraintSystem, OptimizationGoal, SynthesisError};
 
-/// Toy hash: the sum of the inputs. Mirrors `sumCRH` in the Lean model.
-struct SumCRH;
+/// Seed of the toy hash, `uhf(SEED, ·)`.
+const SEED: u64 = 2;
 
-impl CRHScheme for SumCRH {
+/// Toy hash: the UHF at a fixed public seed. Mirrors `uhfCRH 2` in the Lean
+/// model.
+struct UhfCRH;
+
+impl CRHScheme for UhfCRH {
     type Input = [F17];
     type Output = F17;
     type Parameters = ();
@@ -33,14 +38,15 @@ impl CRHScheme for SumCRH {
         _parameters: &Self::Parameters,
         input: T,
     ) -> Result<Self::Output, ark_crypto_primitives::Error> {
-        Ok(input.borrow().iter().sum())
+        Ok(uhf(F17::from(SEED), input.borrow()))
     }
 }
 
-/// Mirrors `sumGadget`: `x₀ + (x₁ + (… + 0))`, emitting no constraints.
-struct SumCRHGadget;
+/// In-circuit `UhfCRH`: multiplies only by the constant seed, so it emits no
+/// constraints.
+struct UhfCRHGadget;
 
-impl CRHSchemeGadget<SumCRH, F17> for SumCRHGadget {
+impl CRHSchemeGadget<UhfCRH, F17> for UhfCRHGadget {
     type InputVar = [FpVar<F17>];
     type OutputVar = FpVar<F17>;
     type ParametersVar = ();
@@ -49,36 +55,7 @@ impl CRHSchemeGadget<SumCRH, F17> for SumCRHGadget {
         _parameters: &Self::ParametersVar,
         input: &Self::InputVar,
     ) -> Result<Self::OutputVar, SynthesisError> {
-        Ok(input.iter().rev().fold(FpVar::zero(), |acc, x| x + &acc))
-    }
-}
-
-/// Mirrors `exampleTrace` in the Lean model: witnesses each value of the
-/// statement and compresses it with the toy hash for both `alpha` and `beta`.
-struct CompressCircuit {
-    statement: Vec<F17>,
-}
-
-impl ConstraintSynthesizer<F17> for CompressCircuit {
-    fn generate_constraints(self, cs: ConstraintSystemRef<F17>) -> Result<(), SynthesisError> {
-        let statement = self
-            .statement
-            .iter()
-            .map(|v| FpVar::new_witness(cs.clone(), || Ok(*v)))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let public_inputs = compress::<SumCRH, SumCRH, F17>(&(), &(), &self.statement)
-            .map_err(|_| SynthesisError::Unsatisfiable)?;
-        let alpha = FpVar::new_input(cs.clone(), || Ok(public_inputs.0))?;
-        let beta = FpVar::new_input(cs.clone(), || Ok(public_inputs.1))?;
-        let gamma = FpVar::new_input(cs, || Ok(public_inputs.2))?;
-        hybrid_compression::enforce::<SumCRH, F17, SumCRHGadget>(
-            &(),
-            &alpha,
-            &beta,
-            &gamma,
-            &statement,
-        )
+        Ok(uhf_gadget(FpVar::constant(F17::from(SEED)), input))
     }
 }
 
@@ -88,12 +65,25 @@ fn trace_matches_lean_model() {
     let expected = read_traces(concat!(env!("CARGO_MANIFEST_DIR"), "/target/traces"))
         .expect("traces written by `lake env lean --run Traces.lean` (see `just verify`)");
 
-    let circuit = CompressCircuit {
-        statement: [1u64, 2, 3, 6].map(F17::from).to_vec(),
-    };
+    // Mirrors `exampleTrace` in the Lean model: witness the statement, then
+    // compress it with the toy hash for both `alpha` and `beta`.
+    let statement = [1u64, 2, 3, 4].map(F17::from);
+    let (alpha, beta, gamma) = compress::<UhfCRH, UhfCRH, F17>(&(), &(), &statement).unwrap();
+
     let cs = ConstraintSystem::<F17>::new_ref();
     cs.set_optimization_goal(OptimizationGoal::Constraints);
-    circuit.generate_constraints(cs.clone()).unwrap();
+    let statement_var = Vec::<FpVar<F17>>::new_witness(cs.clone(), || Ok(statement)).unwrap();
+    let alpha_var = FpVar::new_input(cs.clone(), || Ok(alpha)).unwrap();
+    let beta_var = FpVar::new_input(cs.clone(), || Ok(beta)).unwrap();
+    let gamma_var = FpVar::new_input(cs.clone(), || Ok(gamma)).unwrap();
+    hybrid_compression::enforce::<UhfCRH, F17, UhfCRHGadget>(
+        &(),
+        &alpha_var,
+        &beta_var,
+        &gamma_var,
+        &statement_var,
+    )
+    .unwrap();
     assert!(cs.is_satisfied().unwrap());
 
     assert_eq!(
